@@ -8,7 +8,7 @@ Bitrise config module in `bitrise/`, and each module's pipeline only runs when i
 | `apps/ios` | SwiftUI (XcodeGen) | Swift Testing, swift-snapshot-testing, XCUITest | `ios` |
 | `apps/android` | Jetpack Compose | JUnit, Paparazzi, Compose UI Test | `android` |
 | `apps/react-native` | React Native | Jest + RNTL, Jest snapshots, Detox | `react_native` |
-| `apps/flutter` | Flutter | unit, widget, golden, integration_test | `flutter` |
+| `apps/flutter` | Flutter | unit, widget, golden, integration_test, Patrol | `flutter` |
 | `e2e/maestro` | (Android app) | Maestro flows | `maestro` |
 | `e2e/appium` | (Android app) | Appium + pytest on BrowserStack | `appium` |
 
@@ -27,6 +27,7 @@ cd apps/react-native && npm ci && npx jest
 
 # Flutter
 cd apps/flutter && flutter test
+cd apps/flutter && patrol test   # Patrol: emulator running, see guide Step 5b
 
 # Maestro (emulator running, Android app installed)
 maestro test e2e/maestro

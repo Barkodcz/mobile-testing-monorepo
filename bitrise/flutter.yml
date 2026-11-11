@@ -7,6 +7,8 @@ pipelines:
       flutter_tests: {}
       flutter_integration_tests:
         depends_on: [flutter_tests]
+      flutter_patrol_android:
+        depends_on: [flutter_tests]
     triggers:
       push:
       - branch: main
@@ -90,5 +92,60 @@ workflows:
         - test_name: Flutter integration tests
         - base_path: $BITRISE_SOURCE_DIR/apps/flutter/test-results
         - search_pattern: "*/integration.xml"
+    - save-dart-cache@1: {}
+    - deploy-to-bitrise-io@2: {}
+
+  flutter_patrol_android:
+    summary: Patrol tests (Flutter + native interactions) on an Android emulator.
+    meta:
+      bitrise.io:
+        stack: ubuntu-noble-24.04-bitrise-2025-android
+        machine_type_id: g2.linux.large
+    before_run: [_flutter_setup]
+    steps:
+    - avd-manager@1:
+        inputs:
+        - profile: pixel_6
+        - api_level: "34"
+        - tag: google_apis
+        - abi: x86_64
+    - script@1:
+        title: Prepare Android project for Patrol
+        inputs:
+        - working_dir: $BITRISE_SOURCE_DIR/apps/flutter
+        - content: |
+            set -eo pipefail
+            # Platform folders are generated if they were not committed.
+            [ -d android ] || flutter create . --platforms=android,ios --org io.bitrise.sample --project-name counter_flutter
+            python3 tool/patrol_setup_android.py      # no-op if already applied
+            flutter pub get
+            dart pub global activate patrol_cli 4.8.0
+            envman add --key PATH --value "$PATH:$HOME/.pub-cache/bin"   # keep the CLI on PATH for later steps
+    - wait-for-android-emulator@1: {}
+    - script@1:
+        title: Run Patrol tests
+        inputs:
+        - working_dir: $BITRISE_SOURCE_DIR/apps/flutter
+        - content: |
+            set -eo pipefail
+            export PATH="$PATH:$HOME/.pub-cache/bin"
+            patrol test --device "$BITRISE_EMULATOR_SERIAL" --verbose
+    - script@1:
+        title: Collect Patrol JUnit XML and reports
+        is_always_run: true
+        inputs:
+        - working_dir: $BITRISE_SOURCE_DIR/apps/flutter
+        - content: |
+            set -eo pipefail
+            mkdir -p test-results
+            # Patrol runs Gradle connected tests; AGP writes one XML per device here.
+            npx --yes junit-report-merger test-results/patrol.xml "build/app/outputs/androidTest-results/**/*.xml"
+            cp -r build/app/reports/androidTests "$BITRISE_DEPLOY_DIR/patrol-html-report" 2>/dev/null || true
+    - custom-test-results-export@1:
+        is_always_run: true
+        inputs:
+        - test_name: Patrol (Android)
+        - base_path: $BITRISE_SOURCE_DIR/apps/flutter/test-results
+        - search_pattern: "*/patrol.xml"
     - save-dart-cache@1: {}
     - deploy-to-bitrise-io@2: {}

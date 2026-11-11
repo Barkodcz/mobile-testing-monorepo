@@ -16,6 +16,16 @@ dev_dependencies:
   integration_test:
     sdk: flutter
   flutter_lints: ^5.0.0
+  patrol: ^4.10.0
 
 flutter:
   uses-material-design: true
+
+# Patrol configuration (read by the patrol CLI)
+patrol:
+  app_name: Counter Flutter
+  test_directory: patrol_test
+  android:
+    package_name: io.bitrise.sample.counter_flutter
+  ios:
+    bundle_id: io.bitrise.sample.counterFlutter

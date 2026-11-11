@@ -4,3 +4,7 @@ build/
 .flutter-plugins-dependencies
 test-results/
 **/failures/
+
+# Patrol
+patrol_test/test_bundle.dart
+.patrol.env
