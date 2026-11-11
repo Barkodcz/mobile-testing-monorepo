@@ -43,6 +43,14 @@ workflows:
         - project_path: apps/ios/CounterApp.xcodeproj
         - scheme: CounterApp-Unit
         - destination: platform=iOS Simulator,name=iPhone 16,OS=latest
+    - script@1:
+        title: Keep snapshot reference images
+        is_always_run: true
+        inputs:
+        - working_dir: $BITRISE_SOURCE_DIR/apps/ios/CounterAppTests
+        - content: |
+            # First run records missing references here; download and commit them.
+            if [ -d __Snapshots__ ]; then zip -qr "$BITRISE_DEPLOY_DIR/ios-snapshots.zip" __Snapshots__; fi
     - deploy-to-bitrise-io@2: {}
 
   ios_ui_tests:
