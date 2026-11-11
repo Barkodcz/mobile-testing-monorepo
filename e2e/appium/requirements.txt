@@ -1,0 +1,2 @@
+Appium-Python-Client>=4.0,<6
+pytest>=8,<9

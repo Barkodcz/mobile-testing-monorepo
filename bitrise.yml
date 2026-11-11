@@ -1,0 +1,38 @@
+# Root Bitrise config. It only wires things together:
+# every platform lives in its own module under bitrise/, merged in via `include`.
+# Config modules need the config stored in the repo (not on bitrise.io) and an Enterprise plan.
+format_version: "13"
+default_step_lib_source: https://github.com/bitrise-io/bitrise-steplib.git
+project_type: other
+
+# Default machine for workflows that don't set their own (Linux is cheaper than macOS).
+# Check current stack names at https://stacks.bitrise.io
+meta:
+  bitrise.io:
+    stack: ubuntu-noble-24.04-bitrise-2025-android
+    machine_type_id: g2.linux.medium
+
+include:
+- path: bitrise/ios.yml
+- path: bitrise/android.yml
+- path: bitrise/react-native.yml
+- path: bitrise/flutter.yml
+- path: bitrise/e2e.yml
+
+app:
+  envs:
+  - IOS_DIR: apps/ios
+  - ANDROID_DIR: apps/android
+  - RN_DIR: apps/react-native
+  - FLUTTER_DIR: apps/flutter
+
+# Manual-only pipeline that runs every fast suite at once (no triggers).
+# Start it from the Bitrise UI: Start build > Pipeline > everything_fast.
+pipelines:
+  everything_fast:
+    workflows:
+      ios_unit_tests: {}
+      android_unit_tests: {}
+      android_snapshot_tests: {}
+      rn_jest_tests: {}
+      flutter_tests: {}

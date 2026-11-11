@@ -1,0 +1,6 @@
+.gradle/
+build/
+local.properties
+.idea/
+*.iml
+# Keep: gradlew, gradlew.bat, gradle/wrapper/gradle-wrapper.jar, app/src/test/snapshots/

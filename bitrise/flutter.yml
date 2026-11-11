@@ -1,0 +1,94 @@
+# Flutter module: unit, widget and golden tests; integration_test on an Android emulator.
+format_version: "13"
+
+pipelines:
+  flutter:
+    workflows:
+      flutter_tests: {}
+      flutter_integration_tests:
+        depends_on: [flutter_tests]
+    triggers:
+      push:
+      - branch: main
+        changed_files:
+          regex: '^(apps/flutter/.*|bitrise/flutter\.yml)$'
+      pull_request:
+      - draft_enabled: false
+        changed_files:
+          regex: '^(apps/flutter/.*|bitrise/flutter\.yml)$'
+
+workflows:
+  _flutter_setup:
+    steps:
+    - git-clone@8: {}
+    - flutter-installer@0:
+        inputs:
+        - version: stable
+    - restore-dart-cache@1: {}
+
+  flutter_tests:
+    summary: Unit, widget and golden tests with flutter test (no device).
+    before_run: [_flutter_setup]
+    steps:
+    - flutter-test@1:                     # exports to the Tests tab automatically
+        inputs:
+        - project_location: $BITRISE_SOURCE_DIR/apps/flutter
+    - script@1:
+        title: Keep golden failure images
+        is_always_run: true
+        inputs:
+        - content: cp -r apps/flutter/test/goldens/failures "$BITRISE_DEPLOY_DIR/golden-failures" 2>/dev/null || true
+    - save-dart-cache@1: {}
+    - deploy-to-bitrise-io@2: {}
+
+  flutter_record_goldens:
+    summary: Manual helper. Records golden images on Linux so you can download and commit them.
+    before_run: [_flutter_setup]
+    steps:
+    - script@1:
+        title: Record goldens
+        inputs:
+        - working_dir: $BITRISE_SOURCE_DIR/apps/flutter
+        - content: |
+            set -eo pipefail
+            flutter pub get
+            flutter test --update-goldens test/goldens
+            cp test/goldens/*.png "$BITRISE_DEPLOY_DIR/"
+    - deploy-to-bitrise-io@2: {}
+
+  flutter_integration_tests:
+    summary: integration_test on an Android emulator, converted to JUnit XML.
+    meta:
+      bitrise.io:
+        stack: ubuntu-noble-24.04-bitrise-2025-android
+        machine_type_id: g2.linux.large
+    before_run: [_flutter_setup]
+    steps:
+    - avd-manager@1:
+        inputs:
+        - profile: pixel_6
+        - api_level: "34"
+        - tag: google_apis
+        - abi: x86_64
+    - wait-for-android-emulator@1: {}
+    - script@1:
+        title: Run integration_test
+        inputs:
+        - working_dir: $BITRISE_SOURCE_DIR/apps/flutter
+        - content: |
+            set -eo pipefail
+            # Platform folders are generated if they were not committed.
+            [ -d android ] || flutter create . --platforms=android,ios --org io.bitrise.sample --project-name counter_flutter
+            flutter pub get
+            dart pub global activate junitreport
+            mkdir -p test-results
+            flutter test integration_test -d "$BITRISE_EMULATOR_SERIAL" --machine \
+              | dart pub global run junitreport:tojunit --output test-results/integration.xml
+    - custom-test-results-export@1:
+        is_always_run: true
+        inputs:
+        - test_name: Flutter integration tests
+        - base_path: $BITRISE_SOURCE_DIR/apps/flutter/test-results
+        - search_pattern: "*/integration.xml"
+    - save-dart-cache@1: {}
+    - deploy-to-bitrise-io@2: {}

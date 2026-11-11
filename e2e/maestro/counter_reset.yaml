@@ -1,0 +1,10 @@
+appId: io.bitrise.sample.counter
+name: Reset brings the counter back to zero
+---
+- launchApp:
+    clearState: true
+- tapOn: "Increment"
+- assertVisible: "Count: 1"
+- tapOn: "Reset"
+- assertVisible: "Count: 0"
+- takeScreenshot: after_reset

@@ -1,0 +1,103 @@
+# E2E module: Maestro flows on an emulator, Appium on BrowserStack real devices.
+# Both test the native Android app in apps/android.
+format_version: "13"
+
+pipelines:
+  maestro:
+    workflows:
+      maestro_android: {}
+    triggers:
+      push:
+      - branch: main
+        changed_files:
+          regex: '^(apps/android/.*|e2e/maestro/.*|bitrise/e2e\.yml)$'
+      pull_request:
+      - draft_enabled: false
+        changed_files:
+          regex: '^(e2e/maestro/.*|bitrise/e2e\.yml)$'
+
+  appium:
+    workflows:
+      appium_browserstack: {}
+    triggers:
+      push:                               # real devices cost money: main only
+      - branch: main
+        changed_files:
+          regex: '^(apps/android/.*|e2e/appium/.*|bitrise/e2e\.yml)$'
+
+workflows:
+  maestro_android:
+    summary: Maestro flows against the native Android app on an emulator.
+    meta:
+      bitrise.io:
+        stack: ubuntu-noble-24.04-bitrise-2025-android
+        machine_type_id: g2.linux.large
+    steps:
+    - git-clone@8: {}
+    - restore-gradle-cache@2: {}
+    - avd-manager@1:
+        inputs:
+        - profile: pixel_6
+        - api_level: "34"
+        - tag: google_apis
+        - abi: x86_64
+    - script@1:
+        title: Build debug APK
+        inputs:
+        - working_dir: $BITRISE_SOURCE_DIR/apps/android
+        - content: ./gradlew :app:assembleDebug
+    - wait-for-android-emulator@1: {}
+    - script@1:
+        title: Install Maestro and run flows
+        inputs:
+        - content: |
+            set -eo pipefail
+            curl -Ls "https://get.maestro.mobile.dev" | bash
+            export PATH="$PATH:$HOME/.maestro/bin"
+            adb install -r apps/android/app/build/outputs/apk/debug/app-debug.apk
+            mkdir -p e2e/maestro/test-results
+            maestro test e2e/maestro \
+              --format junit --output e2e/maestro/test-results/maestro.xml \
+              --debug-output "$BITRISE_DEPLOY_DIR/maestro-debug"
+    - custom-test-results-export@1:
+        is_always_run: true
+        inputs:
+        - test_name: Maestro E2E (Android)
+        - base_path: $BITRISE_SOURCE_DIR/e2e/maestro/test-results
+        - search_pattern: "*/maestro.xml"
+    - save-gradle-cache@1: {}
+    - deploy-to-bitrise-io@2: {}
+
+  appium_browserstack:
+    summary: Appium tests on real BrowserStack devices. Needs BROWSERSTACK_USERNAME and BROWSERSTACK_ACCESS_KEY secrets.
+    steps:
+    - git-clone@8: {}
+    - restore-gradle-cache@2: {}
+    - script@1:
+        title: Build release APK
+        inputs:
+        - working_dir: $BITRISE_SOURCE_DIR/apps/android
+        - content: ./gradlew :app:assembleRelease
+    - script@1:
+        title: Upload APK to BrowserStack and run Appium tests
+        inputs:
+        - working_dir: $BITRISE_SOURCE_DIR/e2e/appium
+        - content: |
+            set -eo pipefail
+            APK="$BITRISE_SOURCE_DIR/apps/android/app/build/outputs/apk/release/app-release.apk"
+            export BS_APP_URL=$(curl -sf -u "$BROWSERSTACK_USERNAME:$BROWSERSTACK_ACCESS_KEY" \
+              -X POST "https://api-cloud.browserstack.com/app-automate/upload" \
+              -F "file=@$APK" | jq -r .app_url)
+            echo "Uploaded app: $BS_APP_URL"
+            python3 -m venv .venv && . .venv/bin/activate
+            pip install -q -r requirements.txt
+            mkdir -p test-results
+            pytest tests --junitxml=test-results/appium.xml
+    - custom-test-results-export@1:
+        is_always_run: true
+        inputs:
+        - test_name: Appium on BrowserStack
+        - base_path: $BITRISE_SOURCE_DIR/e2e/appium/test-results
+        - search_pattern: "*/appium.xml"
+    - save-gradle-cache@1: {}
+    - deploy-to-bitrise-io@2: {}

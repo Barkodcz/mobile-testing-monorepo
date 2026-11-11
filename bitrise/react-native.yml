@@ -1,0 +1,84 @@
+# React Native module: Jest + React Native Testing Library, Detox E2E on an iOS simulator.
+format_version: "13"
+
+pipelines:
+  react_native:
+    workflows:
+      rn_jest_tests: {}
+      rn_detox_ios:
+        depends_on: [rn_jest_tests]       # only spend macOS minutes if Jest is green
+    triggers:
+      push:
+      - branch: main
+        changed_files:
+          regex: '^(apps/react-native/.*|bitrise/react-native\.yml)$'
+      pull_request:
+      - draft_enabled: false
+        changed_files:
+          regex: '^(apps/react-native/.*|bitrise/react-native\.yml)$'
+
+workflows:
+  rn_jest_tests:
+    summary: Jest unit, component and snapshot tests (Linux, no simulator).
+    steps:
+    - git-clone@8: {}
+    - restore-npm-cache@2: {}
+    - npm@1:
+        inputs:
+        - workdir: $BITRISE_SOURCE_DIR/apps/react-native
+        - command: ci
+    - script@1:
+        title: Run Jest
+        inputs:
+        - working_dir: $BITRISE_SOURCE_DIR/apps/react-native
+        - content: |
+            set -eo pipefail
+            # jest.config.js adds the jest-junit reporter -> test-results/jest-junit.xml
+            npx jest --ci
+    - custom-test-results-export@1:
+        is_always_run: true
+        inputs:
+        - test_name: Jest (React Native)
+        - base_path: $BITRISE_SOURCE_DIR/apps/react-native/test-results
+        - search_pattern: "*/jest-junit.xml"
+    - save-npm-cache@1: {}
+    - deploy-to-bitrise-io@2: {}
+
+  rn_detox_ios:
+    summary: Detox E2E tests on an iOS simulator (release build).
+    meta:
+      bitrise.io:
+        stack: osx-xcode-16.4.x
+        machine_type_id: g2.mac.medium
+    steps:
+    - git-clone@8: {}
+    - restore-npm-cache@2: {}
+    - npm@1:
+        inputs:
+        - workdir: $BITRISE_SOURCE_DIR/apps/react-native
+        - command: ci
+    - cocoapods-install@2:
+        inputs:
+        - source_root_path: $BITRISE_SOURCE_DIR/apps/react-native/ios
+    - script@1:
+        title: Build and run Detox
+        inputs:
+        - working_dir: $BITRISE_SOURCE_DIR/apps/react-native
+        - content: |
+            set -eo pipefail
+            brew tap wix/brew && brew install applesimutils
+            npx detox build --configuration ios.sim.release
+            npx detox test --configuration ios.sim.release --cleanup --record-logs failing --take-screenshots failing
+    - custom-test-results-export@1:
+        is_always_run: true
+        inputs:
+        - test_name: Detox E2E (iOS)
+        - base_path: $BITRISE_SOURCE_DIR/apps/react-native/test-results
+        - search_pattern: "*/detox-junit.xml"
+    - script@1:
+        title: Keep Detox logs and screenshots
+        is_always_run: true
+        inputs:
+        - content: cp -r apps/react-native/artifacts "$BITRISE_DEPLOY_DIR/detox-artifacts" 2>/dev/null || true
+    - save-npm-cache@1: {}
+    - deploy-to-bitrise-io@2: {}

@@ -1,0 +1,13 @@
+# Runs against the native Android app (apps/android).
+# For the iOS app use appId: io.bitrise.sample.counter as well (same bundle id).
+appId: io.bitrise.sample.counter
+name: Counter starts at zero and increments
+---
+- launchApp:
+    clearState: true
+- assertVisible: "Count: 0"
+- tapOn:
+    id: "increment_button"
+- tapOn:
+    id: "increment_button"
+- assertVisible: "Count: 2"

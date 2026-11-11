@@ -1,0 +1,61 @@
+# iOS module: Swift Testing unit tests, swift-snapshot-testing, XCUITest.
+format_version: "13"
+
+pipelines:
+  ios:
+    workflows:
+      ios_unit_tests: {}
+      ios_ui_tests: {}
+    triggers:
+      push:
+      - branch: main
+        changed_files:
+          regex: '^(apps/ios/.*|bitrise/ios\.yml)$'
+      pull_request:
+      - draft_enabled: false
+        changed_files:
+          regex: '^(apps/ios/.*|bitrise/ios\.yml)$'
+
+workflows:
+  _ios_setup:
+    summary: Clone the repo and generate the Xcode project with XcodeGen.
+    steps:
+    - git-clone@8: {}
+    - script@1:
+        title: Generate Xcode project (XcodeGen)
+        inputs:
+        - working_dir: $BITRISE_SOURCE_DIR/apps/ios
+        - content: |
+            set -eo pipefail
+            brew install xcodegen
+            xcodegen generate
+
+  ios_unit_tests:
+    summary: Unit tests (Swift Testing) and snapshot tests (swift-snapshot-testing).
+    meta:
+      bitrise.io:
+        stack: osx-xcode-16.4.x          # check https://stacks.bitrise.io
+        machine_type_id: g2.mac.medium
+    before_run: [_ios_setup]
+    steps:
+    - xcode-test@6:                       # exports to the Tests tab automatically
+        inputs:
+        - project_path: apps/ios/CounterApp.xcodeproj
+        - scheme: CounterApp-Unit
+        - destination: platform=iOS Simulator,name=iPhone 16,OS=latest
+    - deploy-to-bitrise-io@2: {}
+
+  ios_ui_tests:
+    summary: XCUITest UI tests on an iOS simulator.
+    meta:
+      bitrise.io:
+        stack: osx-xcode-16.4.x
+        machine_type_id: g2.mac.medium
+    before_run: [_ios_setup]
+    steps:
+    - xcode-test@6:
+        inputs:
+        - project_path: apps/ios/CounterApp.xcodeproj
+        - scheme: CounterApp-UI
+        - destination: platform=iOS Simulator,name=iPhone 16,OS=latest
+    - deploy-to-bitrise-io@2: {}

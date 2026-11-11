@@ -1,0 +1,106 @@
+# Android module: JUnit unit tests, Paparazzi snapshots, Compose UI tests on an emulator.
+format_version: "13"
+
+pipelines:
+  android:
+    workflows:
+      android_unit_tests: {}
+      android_snapshot_tests: {}
+      android_ui_tests: {}
+    triggers:
+      push:
+      - branch: main
+        changed_files:
+          regex: '^(apps/android/.*|bitrise/android\.yml)$'
+      pull_request:
+      - draft_enabled: false
+        changed_files:
+          regex: '^(apps/android/.*|bitrise/android\.yml)$'
+
+workflows:
+  android_unit_tests:
+    summary: JVM unit tests with JUnit (testDebugUnitTest).
+    steps:
+    - git-clone@8: {}
+    - restore-gradle-cache@2: {}
+    - android-unit-test@1:                # exports to the Tests tab automatically
+        inputs:
+        - project_location: $BITRISE_SOURCE_DIR/apps/android
+        - module: app
+        - variant: debug
+    - save-gradle-cache@1: {}
+    - deploy-to-bitrise-io@2: {}
+
+  android_snapshot_tests:
+    summary: Paparazzi screenshot tests, compared with the committed snapshots.
+    steps:
+    - git-clone@8: {}
+    - restore-gradle-cache@2: {}
+    - script@1:
+        title: Verify Paparazzi snapshots
+        inputs:
+        - working_dir: $BITRISE_SOURCE_DIR/apps/android
+        - content: |
+            set -eo pipefail
+            ./gradlew :app:verifyPaparazziDebug
+    - script@1:
+        title: Merge JUnit XML and keep diff images
+        is_always_run: true
+        inputs:
+        - working_dir: $BITRISE_SOURCE_DIR/apps/android
+        - content: |
+            set -eo pipefail
+            mkdir -p test-results
+            # Gradle writes one XML per test class; the export step takes one file.
+            npx --yes junit-report-merger test-results/paparazzi.xml "app/build/test-results/testDebugUnitTest/*.xml"
+            cp -r app/build/paparazzi/failures "$BITRISE_DEPLOY_DIR/paparazzi-failures" 2>/dev/null || true
+    - custom-test-results-export@1:
+        is_always_run: true
+        inputs:
+        - test_name: Paparazzi snapshots
+        - base_path: $BITRISE_SOURCE_DIR/apps/android/test-results
+        - search_pattern: "*/paparazzi.xml"
+    - save-gradle-cache@1: {}
+    - deploy-to-bitrise-io@2: {}
+
+  android_record_snapshots:
+    summary: Manual helper. Records Paparazzi snapshots on CI so you can download and commit them.
+    steps:
+    - git-clone@8: {}
+    - script@1:
+        title: Record Paparazzi snapshots
+        inputs:
+        - working_dir: $BITRISE_SOURCE_DIR/apps/android
+        - content: |
+            set -eo pipefail
+            ./gradlew :app:recordPaparazziDebug
+            cd app/src/test && zip -r "$BITRISE_DEPLOY_DIR/paparazzi-snapshots.zip" snapshots
+    - deploy-to-bitrise-io@2: {}
+
+  android_ui_tests:
+    summary: Compose UI tests (instrumented) on an Android emulator.
+    meta:
+      bitrise.io:
+        stack: ubuntu-noble-24.04-bitrise-2025-android
+        machine_type_id: g2.linux.large   # the emulator needs more RAM
+    steps:
+    - git-clone@8: {}
+    - restore-gradle-cache@2: {}
+    - avd-manager@1:                      # boots in the background while we build
+        inputs:
+        - profile: pixel_6
+        - api_level: "34"
+        - tag: google_apis
+        - abi: x86_64
+    - android-build-for-ui-testing@0:     # sets BITRISE_APK_PATH and BITRISE_TEST_APK_PATH
+        inputs:
+        - project_location: $BITRISE_SOURCE_DIR/apps/android
+        - module: app
+        - variant: debug
+    - wait-for-android-emulator@1: {}
+    - android-instrumented-test@0:        # exports to the Tests tab automatically
+        inputs:
+        - main_apk_path: $BITRISE_APK_PATH
+        - test_apk_path: $BITRISE_TEST_APK_PATH
+    - save-gradle-cache@1: {}
+    - deploy-to-bitrise-io@2: {}
