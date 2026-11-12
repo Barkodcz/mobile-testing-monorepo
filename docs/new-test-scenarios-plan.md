@@ -235,6 +235,45 @@ builds, not guessed:
    buttons. Fixed by building `Release` configuration instead (both Android Gradle and iOS
    `xcode-build-for-simulator`), which embeds the JS bundle.
 
+## Step version upgrade pass (all steps, post-implementation)
+
+Per request, every official Bitrise Step used anywhere in `bitrise/*.yml` was checked against the
+steplib (`step_search`) and pinned to its current latest stable version (verifying each new
+version still has every input name this repo relies on, via `step_inputs`, before bumping). Real
+version bumps, not just patch pins:
+
+- `avd-manager` 1 → 2.2.0
+- `cocoapods-install` 2 → 3.1.1
+- `flutter-installer` 0 → 1.1.1
+- `npm` 1 → 3.1.0
+- `restore-gradle-cache` 2 → 3.1.2
+- `restore-dart-cache` 1 → 3.0.2
+- `restore-npm-cache` 2 → 3.0.2
+- `android-unit-test` 1 → 1.3.0
+- `xcode-test` 6 → 6.6.1
+
+Plus exact patch pins for `git-clone`, `script`, `save-gradle-cache`, `save-dart-cache`,
+`save-npm-cache`, `wait-for-android-emulator` (previously floating major-only pins like `@1`,
+which stop receiving updates once a new major ships — now pinned to the actual latest patch).
+
+Also bumped the **Maestro CLI version** itself (the `maestro_version` input, not just the
+Bitrise step wrapping it) from `2.11.0` to the latest stable `2.12.1`. This is the most
+targeted thing to retest against the unresolved blocker below: Maestro 2.12.0's changelog
+specifically calls out improved iOS crash detection ("detect app crashes from how the app's
+process ended... even when the system writes no crash report", "wait for crash reports to be
+written before collecting them") and simulator-start compatibility — directly relevant territory
+to the `SBMainWorkspace` denial, even though no changelog entry names that exact error.
+
+**Not yet re-verified live**: right after this upgrade pass, the Bitrise trigger API started
+rejecting every `trigger_bitrise_build` call (for both new and pre-existing workflows) with
+`"Split configuration requires an Enterprise plan"` — a plan/billing-state error, not a config
+error; `bitrise validate` still passes, and this same split-config (`include:`) structure worked
+for every build earlier in this session. This is outside of what's fixable from the repo. Please
+check your workspace's plan/trial status in the Bitrise dashboard, or try triggering a build
+manually from there (dashboard-triggered builds may not hit the same API limitation) — once
+builds can run again, re-trigger `ios-maestro-e2e` and `ios-maestro-e2e-rn` first to see whether
+the Maestro 2.12.1 bump resolved the launch-denial blocker.
+
 ## Final status per scenario
 
 | # | Scenario | Status |
