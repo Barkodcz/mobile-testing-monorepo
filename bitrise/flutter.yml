@@ -101,11 +101,15 @@ workflows:
         - abi: x86_64
     - wait-for-android-emulator@1: {}
     - script@1:
+        title: Start screen recording
+        inputs:
+        - content: $BITRISE_SOURCE_DIR/scripts/recording/start-android.sh /sdcard/bitrise-recordings integration-test
+    - script@1:
         title: Run integration_test
         inputs:
         - working_dir: $BITRISE_SOURCE_DIR/apps/flutter
         - content: |
-            set -eo pipefail
+            set -o pipefail
             # Platform folders are generated if they were not committed.
             [ -d android ] || flutter create . --platforms=android,ios --org io.bitrise.sample --project-name counter_flutter
             flutter pub get
@@ -113,6 +117,29 @@ workflows:
             mkdir -p test-results
             flutter test integration_test -d "$BITRISE_EMULATOR_SERIAL" --machine \
               | dart pub global run junitreport:tojunit --output test-results/integration.xml
+    - script@1:
+        title: Stop screen recording
+        is_always_run: true
+        inputs:
+        - content: $BITRISE_SOURCE_DIR/scripts/recording/stop-android.sh /sdcard/bitrise-recordings $BITRISE_SOURCE_DIR/recordings
+    - script@1:
+        title: Attach the recording
+        is_always_run: true
+        inputs:
+        - working_dir: $BITRISE_SOURCE_DIR/apps/flutter
+        - content: |
+            RECORDING="$("$BITRISE_SOURCE_DIR/scripts/recording/concat-chunks.sh" \
+              "$BITRISE_SOURCE_DIR/recordings/bitrise-recordings/integration-test_chunk*.mp4" \
+              "$BITRISE_SOURCE_DIR/recordings/integration-test_combined.mp4")"
+            if [ -n "$RECORDING" ]; then
+              python3 "$BITRISE_SOURCE_DIR/scripts/reporting/attach_media_to_junit.py" add-recording-testcase \
+                --junit-xml test-results/integration.xml \
+                --classname counter_flutter.integration_test.app_test \
+                --media "$RECORDING" \
+                --dest-dir test-results
+            else
+              echo "No recording found, exporting test results without a video attachment."
+            fi
     - custom-test-results-export@2.0.0:
         is_always_run: true
         inputs:
@@ -151,6 +178,10 @@ workflows:
             envman add --key PATH --value "$PATH:$HOME/.pub-cache/bin"   # keep the CLI on PATH for later steps
     - wait-for-android-emulator@1: {}
     - script@1:
+        title: Start screen recording
+        inputs:
+        - content: $BITRISE_SOURCE_DIR/scripts/recording/start-android.sh /sdcard/bitrise-recordings patrol
+    - script@1:
         title: Run Patrol tests
         inputs:
         - working_dir: $BITRISE_SOURCE_DIR/apps/flutter
@@ -158,6 +189,11 @@ workflows:
             set -eo pipefail
             export PATH="$PATH:$HOME/.pub-cache/bin"
             patrol test --device "$BITRISE_EMULATOR_SERIAL" --verbose
+    - script@1:
+        title: Stop screen recording
+        is_always_run: true
+        inputs:
+        - content: $BITRISE_SOURCE_DIR/scripts/recording/stop-android.sh /sdcard/bitrise-recordings $BITRISE_SOURCE_DIR/recordings
     - script@1:
         title: Collect Patrol JUnit XML and reports
         is_always_run: true
@@ -173,6 +209,18 @@ workflows:
             zip -qr "$BITRISE_DEPLOY_DIR/patrol-html-report.zip" build/app/reports/androidTests 2>/dev/null || true
             # Patrol pulls screenshots (on-demand + screenshot_on_failure) to test_directory/screenshots.
             zip -qr "$BITRISE_DEPLOY_DIR/patrol-screenshots.zip" patrol_test/screenshots 2>/dev/null || true
+            RECORDING="$("$BITRISE_SOURCE_DIR/scripts/recording/concat-chunks.sh" \
+              "$BITRISE_SOURCE_DIR/recordings/bitrise-recordings/patrol_chunk*.mp4" \
+              "$BITRISE_SOURCE_DIR/recordings/patrol_combined.mp4")"
+            if [ -n "$RECORDING" ]; then
+              python3 "$BITRISE_SOURCE_DIR/scripts/reporting/attach_media_to_junit.py" add-recording-testcase \
+                --junit-xml test-results/patrol.xml \
+                --classname io.bitrise.sample.counter_flutter.MainActivityTest \
+                --media "$RECORDING" \
+                --dest-dir test-results
+            else
+              echo "No recording found, exporting test results without a video attachment."
+            fi
     - custom-test-results-export@2.0.0:
         is_always_run: true
         inputs:
