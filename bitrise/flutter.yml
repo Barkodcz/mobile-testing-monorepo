@@ -140,13 +140,11 @@ workflows:
             mkdir -p test-results
             # Patrol runs Gradle connected tests; AGP writes one XML per device here.
             npx --yes junit-report-merger test-results/patrol.xml "build/app/outputs/androidTest-results/**/*.xml"
-            echo "DEBUG BITRISE_DEPLOY_DIR=[$BITRISE_DEPLOY_DIR]"
-            ls -la "$BITRISE_DEPLOY_DIR" || echo "DEBUG deploy dir not listable"
-            ls -la build/app/reports/androidTests || echo "DEBUG no androidTests report dir"
-            ls -la patrol_test/screenshots || echo "DEBUG no screenshots dir"
-            cp -rv build/app/reports/androidTests "$BITRISE_DEPLOY_DIR/patrol-html-report"
+            # deploy-to-bitrise-io only picks up files in the deploy dir, not raw
+            # copied directories, so zip these instead of cp -r.
+            zip -qr "$BITRISE_DEPLOY_DIR/patrol-html-report.zip" build/app/reports/androidTests 2>/dev/null || true
             # Patrol pulls screenshots (on-demand + screenshot_on_failure) to test_directory/screenshots.
-            cp -rv patrol_test/screenshots "$BITRISE_DEPLOY_DIR/patrol-screenshots"
+            zip -qr "$BITRISE_DEPLOY_DIR/patrol-screenshots.zip" patrol_test/screenshots 2>/dev/null || true
     - custom-test-results-export@1:
         is_always_run: true
         inputs:

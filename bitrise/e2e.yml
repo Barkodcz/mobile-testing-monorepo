@@ -91,6 +91,8 @@ workflows:
         title: Keep Appium screenshots
         is_always_run: true
         inputs:
-        - content: cp -r e2e/appium/test-results/screenshots "$BITRISE_DEPLOY_DIR/appium-screenshots" 2>/dev/null || true
+        # deploy-to-bitrise-io only picks up files in the deploy dir, not raw
+        # copied directories, so zip the screenshots folder instead of cp -r.
+        - content: zip -qr "$BITRISE_DEPLOY_DIR/appium-screenshots.zip" e2e/appium/test-results/screenshots 2>/dev/null || true
     - save-gradle-cache@1: {}
     - deploy-to-bitrise-io@2: {}
