@@ -81,6 +81,9 @@ workflows:
         title: Keep Detox logs and screenshots
         is_always_run: true
         inputs:
-        - content: cp -r apps/react-native/artifacts "$BITRISE_DEPLOY_DIR/detox-artifacts" 2>/dev/null || true
+        - content: |
+            echo "DEBUG BITRISE_DEPLOY_DIR=[$BITRISE_DEPLOY_DIR]"
+            find apps/react-native/artifacts -maxdepth 4 2>&1 || echo "DEBUG no artifacts dir"
+            cp -rv apps/react-native/artifacts "$BITRISE_DEPLOY_DIR/detox-artifacts"
     - save-npm-cache@1: {}
     - deploy-to-bitrise-io@2: {}
