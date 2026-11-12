@@ -52,6 +52,7 @@ workflows:
         - app_path: $BITRISE_SOURCE_DIR/apps/android/app/build/outputs/apk/debug/app-debug.apk
         - flow_path: $BITRISE_SOURCE_DIR/e2e/maestro
         - test_name: Maestro E2E (Android)
+        - num_flaky_test_attempts: 1
     - save-gradle-cache@1: {}
     - deploy-to-bitrise-io@2: {}
 
