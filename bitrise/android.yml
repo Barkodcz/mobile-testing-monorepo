@@ -168,3 +168,41 @@ workflows:
     - save-gradle-cache@1: {}
     - deploy-to-bitrise-io@2.26.2:
         is_always_run: true
+
+  android-espresso-vdt:
+    summary: >
+      Runs the existing Espresso/Compose UI tests (CounterScreenUiTest.kt,
+      same tests as android_ui_tests) through Bitrise's Virtual Device
+      Testing add-on (Firebase Test Lab) instead of a local emulator.
+      android_ui_tests is untouched. Manual-trigger only.
+
+      BLOCKER: needs the Virtual Device Testing add-on enabled on this app
+      (Bitrise dashboard -> app -> Add-ons), which provisions
+      $ADDON_VDTESTING_API_TOKEN automatically -- no Firebase/GCP service
+      account needed, VDT's api_token input already defaults to that Env
+      Var. Written and ready, but unverified until the add-on is enabled.
+      See docs/new-test-scenarios-plan.md.
+    meta:
+      bitrise.io:
+        stack: ubuntu-noble-24.04-bitrise-2025-android
+        machine_type_id: g2.linux.medium
+    steps:
+    - git-clone@8: {}
+    - restore-gradle-cache@2: {}
+    - android-build-for-ui-testing@1.0.0:
+        inputs:
+        - project_location: $BITRISE_SOURCE_DIR/apps/android
+        - module: app
+        - variant: debug
+    - virtual-device-testing-for-android@1.3.6:
+        inputs:
+        - test_type: instrumentation
+        - app_path: $BITRISE_APK_PATH
+        - test_apk_path: $BITRISE_TEST_APK_PATH
+        # One cheap device by default to keep VDT cost low; override by
+        # setting VDT_DEVICE_LIST at the app/workflow level in the Bitrise UI.
+        - test_devices: $VDT_DEVICE_LIST
+        - download_test_results: "true"
+    - save-gradle-cache@1: {}
+    - deploy-to-bitrise-io@2.26.2:
+        is_always_run: true
