@@ -71,7 +71,15 @@ workflows:
             npx detox build --configuration ios.sim.release
             # --take-screenshots all: the explicit device.takeScreenshot() calls in the
             # tests are no-ops on disk under "failing" mode unless the test actually fails.
-            npx detox test --configuration ios.sim.release --cleanup --record-logs failing --take-screenshots all
+            # --record-videos maps $RECORD_VIDEO (all|failures|off) to Detox's own
+            # keep-only-on-failure mode (all|failing|none).
+            case "${RECORD_VIDEO:-failures}" in
+              all) DETOX_VIDEO_MODE=all ;;
+              off) DETOX_VIDEO_MODE=none ;;
+              *) DETOX_VIDEO_MODE=failing ;;
+            esac
+            npx detox test --configuration ios.sim.release --cleanup --record-logs failing \
+              --take-screenshots all --record-videos "$DETOX_VIDEO_MODE"
     - custom-test-results-export@2.0.0:
         is_always_run: true
         inputs:
@@ -79,12 +87,14 @@ workflows:
         - base_path: $BITRISE_SOURCE_DIR/apps/react-native/test-results
         - search_pattern: "*/detox-junit.xml"
     - script@1:
-        title: Keep Detox logs and screenshots
+        title: Keep Detox artifacts as a browsable zip too
         is_always_run: true
         inputs:
         # deploy-to-bitrise-io only picks up files in the deploy dir, not raw
-        # copied directories, so zip the artifacts folder instead of cp -r.
-        - content: zip -qr "$BITRISE_DEPLOY_DIR/detox-artifacts.zip" apps/react-native/artifacts 2>/dev/null || true
+        # copied directories, so zip instead of cp -r. The per-test-case
+        # attachments themselves come from custom-test-results-export above,
+        # matching bitrisePathBuilder.js's naming convention under test-results/.
+        - content: zip -qr "$BITRISE_DEPLOY_DIR/detox-artifacts.zip" apps/react-native/test-results 2>/dev/null || true
     - save-npm-cache@1: {}
     - deploy-to-bitrise-io@2.26.2:
         is_always_run: true
