@@ -3,6 +3,7 @@
 appId: io.bitrise.sample.counter
 name: Counter starts at zero and increments
 ---
+- startRecording: recording
 - launchApp:
     clearState: true
 - assertVisible: "Count: 0"
@@ -12,3 +13,4 @@ name: Counter starts at zero and increments
     id: "increment_button"
 - assertVisible: "Count: 2"
 - takeScreenshot: after_increment
+- stopRecording
