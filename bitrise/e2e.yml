@@ -95,3 +95,67 @@ workflows:
     - save-gradle-cache@1: {}
     - deploy-to-bitrise-io@2.26.2:
         is_always_run: true
+
+  android-appium-local:
+    summary: >
+      Appium against a local Android emulator (AVD) + a local Appium server,
+      instead of BrowserStack -- reuses e2e/appium/tests/test_counter.py
+      unchanged via the APPIUM_TARGET=local switch in conftest.py (scenario
+      5). appium_browserstack is untouched. Manual-trigger only.
+    meta:
+      bitrise.io:
+        stack: ubuntu-noble-24.04-bitrise-2025-android
+        machine_type_id: g2.linux.large
+    steps:
+    - git-clone@8: {}
+    - restore-gradle-cache@2: {}
+    - avd-manager@1:
+        inputs:
+        - profile: pixel_6
+        - api_level: "34"
+        - tag: google_apis
+        - abi: x86_64
+    - script@1:
+        title: Build debug APK
+        inputs:
+        - working_dir: $BITRISE_SOURCE_DIR/apps/android
+        - content: ./gradlew :app:assembleDebug
+    - wait-for-android-emulator@1: {}
+    - script@1:
+        title: Start local Appium server
+        inputs:
+        - content: |
+            set -eo pipefail
+            npm install -g appium@2.11.0
+            appium driver install uiautomator2@3.7.0
+            nohup appium --base-path /wd/hub --allow-insecure chromedriver_autodownload \
+              > /tmp/appium-server.log 2>&1 &
+            echo $! > /tmp/appium-server.pid
+            for _ in $(seq 1 30); do curl -sf http://localhost:4723/wd/hub/status && break; sleep 1; done
+    - script@1:
+        title: Run Appium tests (local)
+        inputs:
+        - working_dir: $BITRISE_SOURCE_DIR/e2e/appium
+        - content: |
+            set -eo pipefail
+            export APPIUM_TARGET=local
+            export APPIUM_SERVER_URL=http://localhost:4723/wd/hub
+            export APPIUM_APK_PATH="$BITRISE_SOURCE_DIR/apps/android/app/build/outputs/apk/debug/app-debug.apk"
+            python3 -m venv .venv && . .venv/bin/activate
+            pip install -q -r requirements.txt
+            mkdir -p test-results
+            pytest tests/test_counter.py --junitxml=test-results/appium-local.xml
+    - script@1:
+        title: Stop local Appium server
+        is_always_run: true
+        inputs:
+        - content: kill "$(cat /tmp/appium-server.pid)" 2>/dev/null || true
+    - custom-test-results-export@2.0.0:
+        is_always_run: true
+        inputs:
+        - test_name: Appium on local Android emulator
+        - base_path: $BITRISE_SOURCE_DIR/e2e/appium/test-results
+        - search_pattern: "*/appium-local.xml"
+    - save-gradle-cache@1: {}
+    - deploy-to-bitrise-io@2.26.2:
+        is_always_run: true
