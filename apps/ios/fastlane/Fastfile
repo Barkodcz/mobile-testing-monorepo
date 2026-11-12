@@ -1,0 +1,18 @@
+default_platform(:ios)
+
+platform :ios do
+  desc "Run the XCUITest suite via fastlane's scan (scenario 7: fastlane scan variant, see docs/new-test-scenarios-plan.md)"
+  lane :scan_xcuitest do
+    scan(
+      project: "CounterApp.xcodeproj",
+      scheme: "CounterApp-UI",
+      devices: ["iPhone 16"],
+      output_directory: "test-results",
+      output_types: "junit",
+      output_files: "xcuitest.xml",
+      clean: false,
+      skip_slack: true,
+      skip_build: false
+    )
+  end
+end

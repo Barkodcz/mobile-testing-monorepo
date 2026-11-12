@@ -1,0 +1,3 @@
+# Minimal Appfile: this sample doesn't do code signing or App Store
+# Connect uploads, so there's nothing else needed here.
+app_identifier("io.bitrise.sample.counter")

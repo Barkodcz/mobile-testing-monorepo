@@ -132,6 +132,63 @@ workflows:
     - deploy-to-bitrise-io@2.26.2:
         is_always_run: true
 
+  ios-fastlane-scan:
+    summary: >
+      Runs the XCUITest suite via fastlane's `scan` (apps/ios/fastlane/),
+      a third way to run the exact same CounterApp-UI scheme alongside
+      ios_ui_tests (native Step) and ios_ui_tests_manual (raw xcodebuild).
+      scan writes a real JUnit XML directly (output_types: junit), so the
+      recording gets a true Tests-tab attachment, same mechanism as
+      ios_ui_tests_manual. Manual-trigger only, not in the `ios` pipeline.
+    meta:
+      bitrise.io:
+        stack: osx-xcode-16.4.x
+        machine_type_id: g2.mac.medium
+    before_run: [_ios_setup]
+    steps:
+    - script@1:
+        title: Install fastlane and start recording
+        inputs:
+        - content: |
+            gem install fastlane -v '~> 2.223' --no-document
+            xcrun simctl boot "iPhone 16" 2>/dev/null || true
+            $BITRISE_SOURCE_DIR/scripts/recording/start-ios-sim.sh booted \
+              $BITRISE_SOURCE_DIR/recordings/ios-fastlane-scan.mov
+    - script@1:
+        title: Run fastlane scan
+        inputs:
+        - working_dir: $BITRISE_SOURCE_DIR/apps/ios
+        - content: |
+            set -eo pipefail
+            mkdir -p test-results
+            fastlane scan_xcuitest
+    - script@1:
+        title: Stop recording and attach it to the Tests tab
+        is_always_run: true
+        inputs:
+        - working_dir: $BITRISE_SOURCE_DIR/apps/ios
+        - content: |
+            $BITRISE_SOURCE_DIR/scripts/recording/stop-ios-sim.sh \
+              $BITRISE_SOURCE_DIR/recordings/ios-fastlane-scan.mov \
+              $BITRISE_SOURCE_DIR/recordings/ios-fastlane-scan.mp4
+            if [ -s "$BITRISE_SOURCE_DIR/recordings/ios-fastlane-scan.mp4" ]; then
+              python3 "$BITRISE_SOURCE_DIR/scripts/reporting/attach_media_to_junit.py" add-recording-testcase \
+                --junit-xml test-results/xcuitest.xml \
+                --classname CounterAppUITests.CounterUITests \
+                --media "$BITRISE_SOURCE_DIR/recordings/ios-fastlane-scan.mp4" \
+                --dest-dir test-results
+            else
+              echo "No recording found, exporting test results without a video attachment."
+            fi
+    - custom-test-results-export@2.0.0:
+        is_always_run: true
+        inputs:
+        - test_name: XCUITest UI tests (fastlane scan)
+        - base_path: $BITRISE_SOURCE_DIR/apps/ios/test-results
+        - search_pattern: "*/xcuitest.xml"
+    - deploy-to-bitrise-io@2.26.2:
+        is_always_run: true
+
   ios_ui_tests_manual:
     summary: >
       Same XCUITest suite as ios_ui_tests, but ("Approach B") driven by a
