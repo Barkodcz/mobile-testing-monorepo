@@ -132,6 +132,43 @@ def cmd_add_recording_testcase(args: argparse.Namespace) -> int:
         return 0
 
 
+def cmd_attach_to_first_failure(args: argparse.Namespace) -> int:
+    """Attach a media file (e.g. a golden-test diff image) to whichever
+    testcase in the XML failed or errored first, without needing to know its
+    classname/name in advance. No-op if nothing failed -- these attachments
+    (image diffs that only exist because of a failure) have nothing useful
+    to attach to a passing run anyway."""
+    if not os.path.isfile(args.junit_xml):
+        print(f"[attach] WARN: JUnit XML not found at {args.junit_xml}, skipping.")
+        return 0
+    if not os.path.isfile(args.media):
+        print(f"[attach] WARN: media file not found at {args.media}, skipping.")
+        return 0
+    try:
+        root = ET.parse(args.junit_xml).getroot()
+        failing = next(
+            (
+                tc
+                for tc in root.iter("testcase")
+                if tc.find("failure") is not None or tc.find("error") is not None
+            ),
+            None,
+        )
+        if failing is None:
+            print("[attach] No failing testcase found, nothing to attach the diff image to.")
+            return 0
+
+        os.makedirs(args.dest_dir, exist_ok=True)
+        ext = os.path.splitext(args.media)[1] or ".png"
+        dest_name = attachment_filename(failing.get("classname", "unknown"), failing.get("name", "unknown"), args.label, ext)
+        shutil.copyfile(args.media, os.path.join(args.dest_dir, dest_name))
+        print(f"[attach] Attached {args.media} -> {dest_name} (first failing testcase)")
+        return 0
+    except Exception as exc:  # noqa: BLE001
+        print(f"[attach] WARN: failed to attach to first failure ({exc}), continuing without it.")
+        return 0
+
+
 def cmd_rename(args: argparse.Namespace) -> int:
     mode = record_video_mode()
     if mode == "off":
@@ -167,6 +204,13 @@ def main() -> int:
     p1.add_argument("--label", default="video")
     p1.add_argument("--dest-dir", required=True)
     p1.set_defaults(func=cmd_add_recording_testcase)
+
+    p3 = sub.add_parser("attach-to-first-failure")
+    p3.add_argument("--junit-xml", required=True)
+    p3.add_argument("--media", required=True)
+    p3.add_argument("--label", default="diff")
+    p3.add_argument("--dest-dir", required=True)
+    p3.set_defaults(func=cmd_attach_to_first_failure)
 
     p2 = sub.add_parser("rename")
     p2.add_argument("--classname", required=True)

@@ -29,17 +29,42 @@ workflows:
     - restore-dart-cache@1: {}
 
   flutter_tests:
-    summary: Unit, widget and golden tests with flutter test (no device).
+    summary: >
+      Unit, widget and golden tests with flutter test (no device). Switched
+      from the native Flutter Test Step to a script + the generic export
+      route so a golden mismatch's diff image can be attached to its exact
+      failing test case (see docs/test-recording-plan.md) -- no video here,
+      golden tests are a still-image diff, not a live screen.
     before_run: [_flutter_setup]
     steps:
-    - flutter-test@1:                     # exports to the Tests tab automatically
-        inputs:
-        - project_location: $BITRISE_SOURCE_DIR/apps/flutter
     - script@1:
-        title: Keep golden failure images
+        title: Run flutter test
+        inputs:
+        - working_dir: $BITRISE_SOURCE_DIR/apps/flutter
+        - content: |
+            set -o pipefail
+            dart pub global activate junitreport
+            mkdir -p test-results
+            flutter test --machine | dart pub global run junitreport:tojunit --output test-results/flutter.xml
+    - script@1:
+        title: Attach golden diff image (if any test failed)
         is_always_run: true
         inputs:
-        - content: cp -r apps/flutter/test/goldens/failures "$BITRISE_DEPLOY_DIR/golden-failures" 2>/dev/null || true
+        - working_dir: $BITRISE_SOURCE_DIR/apps/flutter
+        - content: |
+            DIFF_PNG="$(ls test/goldens/failures/*.png 2>/dev/null | head -n1 || true)"
+            if [ -n "$DIFF_PNG" ]; then
+              python3 "$BITRISE_SOURCE_DIR/scripts/reporting/attach_media_to_junit.py" attach-to-first-failure \
+                --junit-xml test-results/flutter.xml --media "$DIFF_PNG" --label golden_diff --dest-dir test-results
+            else
+              echo "No golden failure image found, nothing to attach."
+            fi
+    - custom-test-results-export@2.0.0:
+        is_always_run: true
+        inputs:
+        - test_name: Flutter tests
+        - base_path: $BITRISE_SOURCE_DIR/apps/flutter/test-results
+        - search_pattern: "*/flutter.xml"
     - save-dart-cache@1: {}
     - deploy-to-bitrise-io@2.26.2:
         is_always_run: true
