@@ -18,6 +18,7 @@ class SceneDelegate: RCTDefaultReactNativeFactoryDelegate, UIWindowSceneDelegate
 
     dependencyProvider = RCTAppDependencyProvider()
     reactNativeFactory = RCTReactNativeFactory(delegate: self)
+    (UIApplication.shared.delegate as? AppDelegate)?.reactNativeFactory = reactNativeFactory
     window = UIWindow(windowScene: windowScene)
     
     #if DEBUG
