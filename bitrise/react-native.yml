@@ -165,6 +165,10 @@ workflows:
         - project_path: apps/react-native/ios/CounterRN.xcworkspace
         - scheme: CounterRN
         - destination: platform=iOS Simulator,name=iPhone 16,OS=latest
+    - script@1:
+        title: Boot simulator for Maestro
+        inputs:
+        - content: xcrun simctl boot "iPhone 16" 2>/dev/null || true
     - maestro-test@1:
         inputs:
         - app_path: $BITRISE_APP_DIR_PATH

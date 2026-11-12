@@ -122,6 +122,10 @@ workflows:
         - project_path: apps/ios/CounterApp.xcodeproj
         - scheme: CounterApp-UI
         - destination: platform=iOS Simulator,name=iPhone 16,OS=latest
+    - script@1:
+        title: Boot simulator for Maestro
+        inputs:
+        - content: xcrun simctl boot "iPhone 16" 2>/dev/null || true
     - maestro-test@1:
         inputs:
         - app_path: $BITRISE_APP_DIR_PATH
@@ -186,6 +190,63 @@ workflows:
         - test_name: XCUITest UI tests (fastlane scan)
         - base_path: $BITRISE_SOURCE_DIR/apps/ios/test-results
         - search_pattern: "*/xcuitest.xml"
+    - deploy-to-bitrise-io@2.26.2:
+        is_always_run: true
+
+  ios-appium-local:
+    summary: >
+      Appium against a local iOS Simulator + a local Appium server (XCUITest
+      driver), covering 2-3 key journeys via the new
+      e2e/appium/tests/test_counter_ios.py (scenario 5) -- a separate test
+      file and `ios_driver` fixture, the existing Android test_counter.py
+      and `driver` fixture are untouched. Manual-trigger only.
+    meta:
+      bitrise.io:
+        stack: osx-xcode-16.4.x
+        machine_type_id: g2.mac.medium
+    before_run: [_ios_setup]
+    steps:
+    - script@1:
+        title: Build for simulator and start local Appium server
+        inputs:
+        - content: |
+            set -eo pipefail
+            xcrun simctl boot "iPhone 16" 2>/dev/null || true
+            npm install -g appium@2.11.0
+            appium driver install xcuitest@7.29.0
+            nohup appium --base-path /wd/hub --allow-insecure chromedriver_autodownload \
+              > /tmp/appium-server.log 2>&1 &
+            echo $! > /tmp/appium-server.pid
+            for _ in $(seq 1 30); do curl -sf http://localhost:4723/wd/hub/status && break; sleep 1; done
+    - xcode-build-for-simulator@3.0.3:
+        inputs:
+        - project_path: apps/ios/CounterApp.xcodeproj
+        - scheme: CounterApp-UI
+        - destination: platform=iOS Simulator,name=iPhone 16,OS=latest
+    - script@1:
+        title: Run Appium tests (local iOS)
+        inputs:
+        - working_dir: $BITRISE_SOURCE_DIR/e2e/appium
+        - content: |
+            set -eo pipefail
+            export APPIUM_SERVER_URL=http://localhost:4723/wd/hub
+            export APPIUM_IOS_APP_PATH="$BITRISE_APP_DIR_PATH"
+            export APPIUM_IOS_DEVICE="iPhone 16"
+            python3 -m venv .venv && . .venv/bin/activate
+            pip install -q -r requirements.txt
+            mkdir -p test-results
+            pytest tests/test_counter_ios.py --junitxml=test-results/appium-ios-local.xml
+    - script@1:
+        title: Stop local Appium server
+        is_always_run: true
+        inputs:
+        - content: kill "$(cat /tmp/appium-server.pid)" 2>/dev/null || true
+    - custom-test-results-export@2.0.0:
+        is_always_run: true
+        inputs:
+        - test_name: Appium on local iOS Simulator
+        - base_path: $BITRISE_SOURCE_DIR/e2e/appium/test-results
+        - search_pattern: "*/appium-ios-local.xml"
     - deploy-to-bitrise-io@2.26.2:
         is_always_run: true
 
