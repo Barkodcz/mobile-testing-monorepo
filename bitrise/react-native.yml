@@ -49,7 +49,7 @@ workflows:
     summary: Detox E2E tests on an iOS simulator (release build).
     meta:
       bitrise.io:
-        stack: osx-xcode-16.4.x
+        stack: osx-xcode-27.2.x
         machine_type_id: g2.mac.medium
     steps:
     - git-clone@8.5.2: {}
@@ -153,7 +153,7 @@ workflows:
       apps/react-native/maestro/README.md. Manual-trigger only.
     meta:
       bitrise.io:
-        stack: osx-xcode-16.4.x
+        stack: osx-xcode-27.2.x
         machine_type_id: g2.mac.medium
     steps:
     - git-clone@8.5.2: {}

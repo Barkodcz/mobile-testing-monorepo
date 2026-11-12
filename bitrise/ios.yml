@@ -51,7 +51,7 @@ workflows:
     summary: Unit tests (Swift Testing) and snapshot tests (swift-snapshot-testing).
     meta:
       bitrise.io:
-        stack: osx-xcode-16.4.x          # check https://stacks.bitrise.io
+        stack: osx-xcode-27.2.x          # check https://stacks.bitrise.io
         machine_type_id: g2.mac.medium
     before_run: [_ios_setup]
     steps:
@@ -85,7 +85,7 @@ workflows:
       docs/test-recording-plan.md.
     meta:
       bitrise.io:
-        stack: osx-xcode-16.4.x
+        stack: osx-xcode-27.2.x
         machine_type_id: g2.mac.medium
     before_run: [_ios_setup]
     steps:
@@ -124,7 +124,7 @@ workflows:
       from the Bitrise UI. See docs/new-test-scenarios-plan.md.
     meta:
       bitrise.io:
-        stack: osx-xcode-16.4.x
+        stack: osx-xcode-27.2.x
         machine_type_id: g2.mac.medium
     before_run: [_ios_setup]
     steps:
@@ -173,7 +173,7 @@ workflows:
       ios_ui_tests_manual. Manual-trigger only, not in the `ios` pipeline.
     meta:
       bitrise.io:
-        stack: osx-xcode-16.4.x
+        stack: osx-xcode-27.2.x
         machine_type_id: g2.mac.medium
     before_run: [_ios_setup]
     steps:
@@ -229,7 +229,7 @@ workflows:
       and `driver` fixture are untouched. Manual-trigger only.
     meta:
       bitrise.io:
-        stack: osx-xcode-16.4.x
+        stack: osx-xcode-27.2.x
         machine_type_id: g2.mac.medium
     before_run: [_ios_setup]
     steps:
@@ -310,7 +310,7 @@ workflows:
       demonstrate the alternative, not to double-run UI tests on every push.
     meta:
       bitrise.io:
-        stack: osx-xcode-16.4.x
+        stack: osx-xcode-27.2.x
         machine_type_id: g2.mac.medium
     before_run: [_ios_setup]
     steps:
@@ -369,7 +369,7 @@ workflows:
       ios_xcuitest_sharded pipeline -- don't start this workflow directly.
     meta:
       bitrise.io:
-        stack: osx-xcode-16.4.x
+        stack: osx-xcode-27.2.x
         machine_type_id: g2.mac.medium
     before_run: [_ios_setup]
     steps:
@@ -400,7 +400,7 @@ workflows:
       stage 1.
     meta:
       bitrise.io:
-        stack: osx-xcode-16.4.x
+        stack: osx-xcode-27.2.x
         machine_type_id: g2.mac.medium
     steps:
     - pull-intermediate-files@1.3.7:
@@ -434,7 +434,7 @@ workflows:
       entry, separate from shard 2's.
     meta:
       bitrise.io:
-        stack: osx-xcode-16.4.x
+        stack: osx-xcode-27.2.x
         machine_type_id: g2.mac.medium
     steps:
     - pull-intermediate-files@1.3.7:
@@ -473,7 +473,7 @@ workflows:
       entry, separate from shard 1's.
     meta:
       bitrise.io:
-        stack: osx-xcode-16.4.x
+        stack: osx-xcode-27.2.x
         machine_type_id: g2.mac.medium
     steps:
     - pull-intermediate-files@1.3.7:
