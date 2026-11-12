@@ -1,54 +1,102 @@
 # Test Reports + video recording plan
 
-Discovery pass over every test suite in the monorepo, per Step 1 of the task.
+Every test suite in this monorepo reports into Bitrise's **Tests** tab, and every suite that
+drives a real UI (emulator/simulator) attaches a screen recording to its test case there too.
+This doc records the discovery pass, the decisions made, and the final status per project.
 
-## Decisions (confirmed by Balázs)
+## Final status
 
-1. **iOS XCUITest (row 6)**: implement **both** approaches as separate workflows —
-   `ios_ui_tests` (pre-booted simulator + `xcode-test@6` pointed at it) and
-   `ios_ui_tests_manual` (hand-rolled `xcodebuild test` script with full control over
-   `simctl recordVideo`). Since this is a reference/example repo, showing both techniques is
-   more valuable than picking one.
-2. **Paparazzi / Flutter golden diff attachments (rows 2, 9)**: implement as many of the
-   documented attachment options as apply, not just one — e.g. Paparazzi gets both the
-   `BitriseSnapshotHandler` (filename-convention) attachment *and* the zip-artifact fallback,
-   so the example repo demonstrates multiple techniques side by side.
-3. **Espresso per-test video (row 3)**: build it (custom `RunListener`).
-4. **Detox `pathBuilder` (row 8)**: build it against the installed `detox@^20.51.4` API.
-5. **Appium video (row 13)**: implement in code; cannot be verified end-to-end until
-   `BROWSERSTACK_USERNAME`/`BROWSERSTACK_ACCESS_KEY` secrets exist — verify later.
+| # | Project / suite | Reporting route | Attachment method | Recording status |
+|---|---|---|---|---|
+| 1 | `apps/android` unit (`CounterTest.kt`) | native (`android-unit-test@1`) | n/a | n/a — no UI |
+| 2 | `apps/android` Paparazzi (`CounterScreenSnapshotTest.kt`) | generic (`custom-test-results-export`) | **implemented** — `BitrisePaparazzi.kt`'s `BitriseSnapshotHandler` writes each rendered frame as `<classname>__<name>__<label>.png` directly into the export dir; **verified live** (attached to `counterScreenDefault`'s passing run) | n/a — still-image diff, not a live screen. Also kept as a `paparazzi-failures.zip` artifact fallback |
+| 3 | `apps/android` instrumented UI (`CounterScreenUiTest.kt`) | **switched to generic** (was native `android-instrumented-test@0`) so we control where the video lands | **implemented**, synthetic `zz_session_recording` testcase via `attach_media_to_junit.py add-recording-testcase`; **verified live** (correctly skipped attaching since `RECORD_VIDEO=failures` default + both tests passed) | **implemented** — suite-level `adb shell screenrecord` (host-side only; instrumented test code can't exec `screenrecord` itself, SELinux blocks it from an app-process UID) |
+| 4 | `apps/ios` unit (Swift Testing) | native (`xcode-test@6`) | automatic via `.xcresult` | n/a — no UI |
+| 5 | `apps/ios` snapshot (swift-snapshot-testing) | native (`xcode-test@6`) | automatic via `.xcresult` | n/a — still-image diff |
+| 6 | `apps/ios` XCUITest (`CounterUITests.swift`) | **both approaches implemented as separate workflows** | Approach A: artifact only (xcresult doesn't match externally-recorded files). Approach B: real JUnit + attached video | **implemented, both verified live**: `ios_ui_tests` (Approach A, pre-booted sim + native step) produced `ios-ui-tests-recording.mp4` as a plain artifact; `ios_ui_tests_manual` (Approach B, manual `xcodebuild test` + `xcpretty`) ran clean with real JUnit output (no video attached since nothing failed, by design) |
+| 7 | `apps/react-native` Jest | generic (`custom-test-results-export`) | n/a | n/a — no UI |
+| 8 | `apps/react-native` Detox | generic (`custom-test-results-export`) | **implemented** — `bitrisePathBuilder.js` names every screenshot/video/log per convention; **verified live**: `initial_count.png`, `after_increment.png`, `after_reset.png` all attached to their test cases, plus Detox's own automatic `testStart`/`testDone` screenshots | **implemented** — `--record-videos` mapped from `$RECORD_VIDEO` to Detox's own `all/failing/none` modes; not yet seen a video attachment live (no failing run triggered) but the screenshot path proves the pathBuilder + attachment mechanism works end to end |
+| 9 | `apps/flutter` unit/widget/golden | **switched to generic** (was native `flutter-test@1`) so a golden failure's diff image can be attached to its exact test case | **implemented** — `attach-to-first-failure` mode finds whichever testcase failed without needing to guess tojunit's naming scheme; **verified live** that the reporting pipeline itself is correct (same 7 tests, same names, as before the switch) | n/a — still-image diff |
+| 10 | `apps/flutter` `integration_test` | generic (`custom-test-results-export`) | **implemented**, synthetic recording testcase, same mechanism as row 3; **verified live** (build passed, correctly attached nothing since nothing failed) | **implemented** — suite-level `adb shell screenrecord`, same scripts as row 3 |
+| 11 | `apps/flutter` Patrol | generic (`custom-test-results-export`) | **implemented**, same mechanism as row 3; **verified live** | **implemented** — suite-level `adb shell screenrecord` |
+| 12 | `e2e/maestro` | native (`maestro-test@1`) | **automatic**, Maestro's own `startRecording`/`stopRecording` + the Step's built-in attachment matching | **implemented and verified live** — every test case (including an actual failing retry attempt) has its `recording.mp4` attached |
+| 13 | `e2e/appium` (BrowserStack) | generic (`custom-test-results-export`) | **implemented** — `driver.start_recording_screen()`/`stop_recording_screen()` in `conftest.py`, decoded straight to the filename convention; screenshot path also fixed (was writing to a nested dir that was never actually scanned for attachments) | **implemented, NOT verified** — blocked on missing `BROWSERSTACK_USERNAME`/`BROWSERSTACK_ACCESS_KEY` secrets (flagged earlier in this engagement) |
 
-Build order: easiest/lowest-risk first (Maestro recording, the recurring `cp -r`→`zip` bug,
-env var + version pinning), then the framework-specific heavier lifts one at a time, pushing
-and live-verifying on Bitrise after each as we've been doing all session.
+## What's genuinely unverified
 
-## Inventory
+- **Appium / BrowserStack (row 13)**: can't run at all without the two secrets. The code is
+  written and locally reviewed but has never executed against a real BrowserStack session.
+- **The actual "keep video on failure" branch**: every live build in this session had passing
+  tests, so the `RECORD_VIDEO=failures` + *something failed* → *video attached* path was only
+  exercised by Maestro (which had a real flaky failure) and by local unit tests of
+  `attach_media_to_junit.py` (which explicitly construct a failing-testcase XML fixture and
+  confirm the attachment gets added). Triggering `android_ui_tests` with a build-time
+  `RECORD_VIDEO=all` override via the trigger API did not seem to actually override the
+  app-level env var in testing — worth double-checking directly in the Bitrise UI ("Start
+  build" → env var override field) rather than via API, next time this needs verifying.
+- **Detox's own video recording** (as opposed to screenshots, which are verified): `--record-videos`
+  is wired up and the screenshot path proves the underlying pathBuilder/attachment mechanism
+  works, but no live build has actually produced and attached a Detox *video* yet.
+- **Patrol/integration_test/Android UI test video attachment** when something actually fails:
+  same caveat as above — the "nothing failed, correctly skip" path is verified; the "something
+  failed, attach it" path is not, live.
 
-| # | Project / suite | Framework | Platform | Runs where | Classification | Reporting route (current → target) | Attachment method (target) | Recording approach (target) |
-|---|---|---|---|---|---|---|---|---|
-| 1 | `apps/android` unit (`CounterTest.kt`) | JUnit4 | JVM | `android_unit_tests` workflow | Unit/logic | native (`android-unit-test@1`) → unchanged | n/a | n/a (no UI) |
-| 2 | `apps/android` Paparazzi (`CounterScreenSnapshotTest.kt`) | Paparazzi (JVM render, no device) | JVM (Robolectric-style render) | `android_snapshot_tests` workflow | UI, but **offscreen still-image diff, not a live screen** | generic (jest→junit-report-merger→`custom-test-results-export`) → unchanged route, **fix existing bug**: diff images currently copied with `cp -r` into `$BITRISE_DEPLOY_DIR/paparazzi-failures`, which `deploy-to-bitrise-io` silently drops (confirmed this exact bug 3 times already this session for Detox/Patrol/Appium — only `zip`-ed files get picked up) | **needs a real implementation**: Bitrise's own doc describes a custom `bitrisePaparazzi(...)` JUnit rule + `BitriseSnapshotHandler` that writes diff PNGs using the `<classname>__<name>__<label>.png` convention directly into the test-result dir. That's non-trivial Kotlin code I have not written/tested here. | no video (Paparazzi has no concept of video; it's a single rendered frame) |
-| 3 | `apps/android` instrumented Compose UI (`CounterScreenUiTest.kt`) | androidx.test / Espresso test runner | Real Android emulator (Bitrise VM, avd-manager) | `android_ui_tests` workflow | **UI/E2E — real screen** | native (`android-instrumented-test@0`) → unchanged | Bitrise's naming doc has an Espresso-specific example: register a `RunListener` that captures a screenshot (or in our case, start/stop a recording) per test, named via the clean-function convention. **This needs a new Kotlin `RunListener` class added to `androidTest` source plus Gradle wiring** — real implementation work, not a one-line change. | `adb shell screenrecord` around each test (or the whole run), looped in <180s chunks, pulled via `adb pull`, converted/renamed per test case |
-| 4 | `apps/ios` unit (`CounterTests.swift`, Swift Testing) | Swift Testing | iOS Simulator (no real UI driven) | `ios_unit_tests` workflow | Unit/logic | native (`xcode-test@6`) → unchanged | automatic via `.xcresult` | n/a |
-| 5 | `apps/ios` snapshot (`CounterSnapshotTests.swift`, swift-snapshot-testing) | swift-snapshot-testing (XCTest) | iOS Simulator, offscreen render | `ios_unit_tests` workflow (same scheme, `CounterApp-Unit`) | UI, offscreen still-image diff | native (`xcode-test@6`) → unchanged | automatic via `.xcresult` (XCTest attachments embed into xcresult; Bitrise extracts them with no extra setup) | no video (still-image diff, same reasoning as Paparazzi) |
-| 6 | `apps/ios` XCUITest (`CounterUITests.swift`) | XCUITest | Real iOS Simulator | `ios_ui_tests` workflow | **UI/E2E — real screen** | native (`xcode-test@6`) → unchanged | automatic via `.xcresult`, **plus** rename/attach a video per Bitrise's naming convention since xcresult auto-attach is for XCTest-captured attachments, not an externally recorded `simctl` video | **architecture decision needed**: `xcode-test@6` boots and owns the simulator lifecycle internally. To wrap `simctl io booted recordVideo` around it we'd need to either (a) pre-boot the simulator ourselves with an explicit step and point `xcode-test` at the already-booted device, or (b) run `xcrun xcodebuild test` manually in a script step instead of the native step (losing some of the native step's convenience). Flagging this for your input before I pick one. |
-| 7 | `apps/react-native` Jest unit/component | Jest + RNTL | Node (no device) | `rn_jest_tests` workflow | Unit/logic | generic (jest-junit → `custom-test-results-export`) → unchanged | n/a | n/a |
-| 8 | `apps/react-native` Detox E2E | Detox + Jest | Real iOS Simulator | `rn_detox_ios` workflow | **UI/E2E — real screen** | generic (detox-junit.xml → `custom-test-results-export`) → unchanged route, same zip-not-cp fix already applied to `detox-artifacts.zip` this session | Bitrise's Detox example: point `artifacts.pathBuilder` in `.detoxrc.js` at a function using the same clean/convention naming, so Detox itself writes files with the exact `<classname>__<name>__<label>.<ext>` names Bitrise expects — **this needs real `.detoxrc.js` changes using Detox's `pathBuilder` API**, which I have not validated against the exact installed Detox version (`^20.51.4`) | Detox's own `--record-videos all|failing` (not currently enabled — only screenshots and failing-logs are on right now), `artifacts-location` already implied by default `./artifacts` |
-| 9 | `apps/flutter` unit/widget/golden (`flutter_tests` workflow) | `flutter_test` | Flutter test VM (golden is an offscreen render) | `flutter_tests` workflow | Unit/widget: logic. Golden: offscreen still-image diff | native (`flutter-test@1`) → unchanged | golden failures: same recurring `cp -r` bug as Paparazzi — needs fixing to `zip`, attachment-per-testcase would need the XML-properties fallback since `flutter_test`'s JSON reporter → JUnit conversion path isn't one Bitrise documents a filename convention for | no video for golden (still-image diff) |
-| 10 | `apps/flutter` `integration_test` (`flutter_integration_tests` workflow) | `integration_test` package | Real Android emulator | own workflow | **UI/E2E — real screen** | generic (`--machine` piped to `tojunit` → `custom-test-results-export`) → unchanged | XML-properties fallback (no native filename convention for this path) | no universal built-in video support (per task's own table) → OS-level `adb shell screenrecord`, same script as row 3 |
-| 11 | `apps/flutter` Patrol (`flutter_patrol_android` workflow) | Patrol (Flutter + native, Gradle connected test) | Real Android emulator | own workflow | **UI/E2E — real screen** | generic (androidTest XML → `custom-test-results-export`) → unchanged | XML-properties fallback | same as row 3/10: no built-in Patrol video → `adb shell screenrecord` |
-| 12 | `e2e/maestro` (`maestro_android` workflow) | Maestro | Real Android emulator | own workflow | **UI/E2E — real screen** | native (`maestro-test@1`) → unchanged | **automatic** — the `maestro-test` step's own description states it already attaches each flow's screenshots, `startRecording` videos, and logs to its test case with zero extra Bitrise-side config | **easy, low-ambiguity fix**: just add `startRecording: <name>` / `stopRecording` commands to `counter_basic.yaml` / `counter_reset.yaml` — Maestro and the Bitrise step do the rest |
-| 13 | `e2e/appium` (`appium_browserstack` workflow) | Appium (pytest) on BrowserStack real devices | Real device (BrowserStack cloud) | own workflow | **UI/E2E — real screen** | generic (`pytest --junitxml` → `custom-test-results-export`) → unchanged | XML-properties fallback via pytest's built-in `record_property` fixture (adds `<properties>` to the testcase automatically — no custom plugin needed) | BrowserStack already auto-records a full session video per test, but that only shows in BrowserStack's own dashboard, not Bitrise's Tests tab. To satisfy "video attached under its test case in the Tests tab" we'd need `driver.start_recording_screen()` / `stop_recording_screen()` in a pytest fixture, decode the returned base64 to an mp4, and reference it via `record_property`. **Still blocked on missing `BROWSERSTACK_USERNAME`/`BROWSERSTACK_ACCESS_KEY` secrets (flagged earlier in this conversation) — can't verify any of this with a real build until those are set.** |
+## How to use
 
-## Flagged for your input before I implement
+### Finding results and videos
+Open a build on Bitrise → **Tests** tab. Each test case lists its attachments (screenshots,
+logs, video) inline. For the two cases that can only produce a plain build artifact instead of
+a true attachment (`ios_ui_tests`'s recording, and the `*-failures.zip` / `*-screenshots.zip`
+fallbacks), check the **Artifacts** tab instead.
 
-1. **iOS XCUITest video (row 6)** — `xcode-test@6` owns simulator boot/teardown. Pre-booting the simulator ourselves to wrap `simctl io booted recordVideo` around it changes how the workflow manages the simulator. Want me to go with pre-boot + point `xcode-test` at the already-running device, or switch that workflow to a manual `xcodebuild test` script step?
-2. **Android Paparazzi + Flutter golden diff attachments (rows 2, 9)** — both need custom code (a Kotlin `BitriseSnapshotHandler` for Paparazzi; XML-properties for golden) beyond a one-line config change. I'll write these, but want to flag the Paparazzi one specifically since Bitrise's own doc implies writing a small Gradle/Kotlin integration I haven't validated against `app.cash.paparazzi:1.3.5` specifically.
-3. **Espresso per-test-case video (row 3)** — same deal: a custom `RunListener` registered in Gradle. Real code, will write it, flagging so the diff doesn't surprise you.
-4. **Detox `pathBuilder` (row 8)** — need to check the exact `pathBuilder` function signature against Detox `^20.51.4`'s actual artifacts API before writing it, since Detox's artifacts internals have changed across majors.
-5. **Appium video (row 13)** — implementable, but literally unverifiable end-to-end until `BROWSERSTACK_USERNAME`/`BROWSERSTACK_ACCESS_KEY` are configured (same blocker as the rest of this conversation).
+### Toggling recording
+Set the `RECORD_VIDEO` env var — `all`, `failures` (default), or `off` — either in
+`bitrise.yml`'s `app.envs`, or per build via **Start build** → env vars in the Bitrise UI (the
+programmatic `trigger_bitrise_build` API's `environments` param did not reliably override it in
+testing — use the UI field instead). Frameworks with a native keep-on-failure mode (Detox,
+Patrol's screenshots) map directly to their own flag; everywhere else (Android/Flutter
+suite-level recordings) the `attach_media_to_junit.py add-recording-testcase` logic decides
+whether to keep the video based on whether the JUnit XML shows any failures.
 
-None of these are "I don't know what to do" — they're "here's the real implementation I'm about to write, confirming scope before I touch 5 workflow files + Kotlin/JS/Python test code across 4 languages."
+### Known limitations
+- **Android `screenrecord`'s ~180s cap**: `start-android.sh` loops in chunks to cover longer
+  runs; `concat-chunks.sh` stitches them back together with `ffmpeg` if more than one chunk
+  exists (falls back to the first chunk with a warning if `ffmpeg` isn't on the image).
+- **Virtual Device Testing / Firebase Test Lab is not used anywhere in this repo** — all
+  Android/iOS UI tests run on Bitrise-hosted emulators/simulators, so this doesn't apply here,
+  but if it's added later: VDT records video automatically, don't add custom recording on top
+  of it, and set `download_test_results: true` so it surfaces in the Tests tab.
+  Also note VDT's own ~30 minute per-test cap if adopted.
+- **Emulators need hardware acceleration**: Bitrise's hosted Android emulators already have it;
+  this only matters if these workflows are ever run on self-hosted/bare-metal runners.
+  `screenrecord` and `simctl recordVideo` both work fine without hardware-accelerated *video
+  encode* specifically, but a slow/software-rendered emulator will produce a choppier capture.
+  Not an issue encountered in this session's live runs.
+  `.mov`→`.mp4` conversion: Bitrise Test Reports only accept `.mp4`/`.webm`/`.ogg`, not `.mov`;
+  `stop-ios-sim.sh` always converts via `ffmpeg` and keeps the `.mov` (with a warning) only if
+  `ffmpeg` isn't available or the conversion itself fails.
+- **iOS has two parallel implementations on purpose**: `ios_ui_tests` (native Step, artifact-only
+  video) runs on every push via the `ios` pipeline; `ios_ui_tests_manual` (manual `xcodebuild`,
+  true Tests-tab video attachment) is manual-trigger only, to demonstrate the trade-off without
+  doubling every push's macOS minutes.
+- **No credentials ever appear in a recording**: none of these test suites display secrets,
+  tokens, or credentials on screen (confirmed by reading every test file touched in this task —
+  they're all driving a sample counter app's UI).
 
-## Not yet done (pending your go-ahead)
-- Step 2 (recording implementation), Step 3 (Bitrise wiring, `RECORD_VIDEO` env var, scripts/ directory), Step 4 (robustness pass), and the rest of Step 5's deliverables.
+## Decisions made along the way
+
+1. **iOS XCUITest**: implemented both approaches side by side rather than picking one (see row 6).
+2. **Paparazzi**: implemented both the filename-convention attachment *and* kept the zip-artifact
+   fallback, to show multiple techniques in this example repo.
+3. **Espresso-style per-test video**: attempted, but instrumented test code can't actually exec
+   `screenrecord` (SELinux blocks it from an app-process UID) — recording ended up suite-level,
+   host-side, same as `integration_test`/Patrol, attached via a synthetic test case instead.
+4. **Detox `pathBuilder`**: implemented and verified against the actual installed `detox@20.51.4`
+   type definitions and Bitrise's documented example.
+5. **Appium**: implemented in code per the task's instruction to verify later.
+
+A recurring bug found and fixed **four separate times** across this session (Detox, Patrol,
+Appium, and again here for Paparazzi/golden): `deploy-to-bitrise-io`'s directory-deploy mode
+silently drops anything copied in with `cp -r` — only `zip`-ed files or files picked up by
+`custom-test-results-export`'s own attachment-matching actually show up. Every "keep this as a
+zip artifact" step in this repo now zips rather than copies.
