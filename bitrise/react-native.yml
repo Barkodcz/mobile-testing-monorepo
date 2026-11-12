@@ -66,7 +66,7 @@ workflows:
         - working_dir: $BITRISE_SOURCE_DIR/apps/react-native
         - content: |
             set -eo pipefail
-            brew tap wix/brew && brew install applesimutils
+            brew tap wix/brew && brew install wix/brew/applesimutils
             npx detox build --configuration ios.sim.release
             npx detox test --configuration ios.sim.release --cleanup --record-logs failing --take-screenshots failing
     - custom-test-results-export@1:

@@ -42,16 +42,20 @@ class _CounterScreenState extends State<CounterScreen> {
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                FilledButton(
-                  key: const Key('decrement_button'),
-                  onPressed: () => setState(() => _counter = _counter.decrement()),
-                  child: const Text('Decrement'),
+                Flexible(
+                  child: FilledButton(
+                    key: const Key('decrement_button'),
+                    onPressed: () => setState(() => _counter = _counter.decrement()),
+                    child: const Text('Decrement'),
+                  ),
                 ),
                 const SizedBox(width: 16),
-                FilledButton(
-                  key: const Key('increment_button'),
-                  onPressed: () => setState(() => _counter = _counter.increment()),
-                  child: const Text('Increment'),
+                Flexible(
+                  child: FilledButton(
+                    key: const Key('increment_button'),
+                    onPressed: () => setState(() => _counter = _counter.increment()),
+                    child: const Text('Increment'),
+                  ),
                 ),
               ],
             ),
