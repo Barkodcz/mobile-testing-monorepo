@@ -373,9 +373,15 @@ workflows:
     - deploy-to-bitrise-io@2.26.2:
         is_always_run: true
         inputs:
-        - pipeline_intermediate_files: |-
-            BITRISE_TEST_BUNDLE_PATH
-            BITRISE_XCTESTRUN_FILE_PATH
+        # BITRISE_XCTESTRUN_FILE_PATH is a file *inside*
+        # BITRISE_TEST_BUNDLE_PATH's own directory tree (its .xctestrun
+        # references the built .app via a path relative to that tree).
+        # Listing both here makes pull-intermediate-files extract them into
+        # two separate, isolated directories downstream, breaking that
+        # relative reference ("bundle identifier... couldn't be read",
+        # confirmed live, build #125). Pass only the bundle dir; each
+        # downstream stage re-finds the .xctestrun file inside it.
+        - pipeline_intermediate_files: BITRISE_TEST_BUNDLE_PATH
 
   ios-xcuitest-shard-calc:
     summary: >
@@ -391,20 +397,26 @@ workflows:
     - pull-intermediate-files@1.3.7:
         inputs:
         - artifact_sources: ios-xcuitest-shard-build
+    - script@1:
+        title: Locate the .xctestrun file inside the pulled test bundle
+        inputs:
+        - content: |
+            set -eo pipefail
+            XCTESTRUN_FILE_PATH="$(find "$BITRISE_TEST_BUNDLE_PATH" -maxdepth 1 -name '*.xctestrun' | head -1)"
+            envman add --key XCTESTRUN_FILE_PATH --value "$XCTESTRUN_FILE_PATH"
     - xcode-test-shard-calculation@0.2.1:
         inputs:
         # product_path wants the .xctestrun file itself (supported formats:
         # xctestrun / xctestproducts) -- BITRISE_TEST_BUNDLE_PATH is the raw
         # test bundle directory and fails with "unsupported test products
         # file extension" (confirmed live, build #112).
-        - product_path: $BITRISE_XCTESTRUN_FILE_PATH
+        - product_path: $XCTESTRUN_FILE_PATH
         - shard_count: $XCUITEST_SHARD_COUNT
     - deploy-to-bitrise-io@2.26.2:
         is_always_run: true
         inputs:
         - pipeline_intermediate_files: |-
             BITRISE_TEST_SHARDS_PATH
-            BITRISE_XCTESTRUN_FILE_PATH
             BITRISE_TEST_BUNDLE_PATH
 
   ios-xcuitest-shard-1:
@@ -420,12 +432,19 @@ workflows:
         inputs:
         - artifact_sources: ios-xcuitest-shard-calc
     - script@1:
+        title: Locate the .xctestrun file inside the pulled test bundle
+        inputs:
+        - content: |
+            set -eo pipefail
+            XCTESTRUN_FILE_PATH="$(find "$BITRISE_TEST_BUNDLE_PATH" -maxdepth 1 -name '*.xctestrun' | head -1)"
+            envman add --key XCTESTRUN_FILE_PATH --value "$XCTESTRUN_FILE_PATH"
+    - script@1:
         title: Boot simulator
         inputs:
         - content: xcrun simctl boot "iPhone 16" 2>/dev/null || true
     - xcode-test-without-building@1.0.1:
         inputs:
-        - xctestrun: $BITRISE_XCTESTRUN_FILE_PATH
+        - xctestrun: $XCTESTRUN_FILE_PATH
         - destination: platform=iOS Simulator,name=iPhone 16,OS=latest
         # xcode-test-shard-calculation writes one file per shard under
         # $BITRISE_TEST_SHARDS_PATH; exact naming confirmed via a live run
@@ -447,12 +466,19 @@ workflows:
         inputs:
         - artifact_sources: ios-xcuitest-shard-calc
     - script@1:
+        title: Locate the .xctestrun file inside the pulled test bundle
+        inputs:
+        - content: |
+            set -eo pipefail
+            XCTESTRUN_FILE_PATH="$(find "$BITRISE_TEST_BUNDLE_PATH" -maxdepth 1 -name '*.xctestrun' | head -1)"
+            envman add --key XCTESTRUN_FILE_PATH --value "$XCTESTRUN_FILE_PATH"
+    - script@1:
         title: Boot simulator
         inputs:
         - content: xcrun simctl boot "iPhone 16" 2>/dev/null || true
     - xcode-test-without-building@1.0.1:
         inputs:
-        - xctestrun: $BITRISE_XCTESTRUN_FILE_PATH
+        - xctestrun: $XCTESTRUN_FILE_PATH
         - destination: platform=iOS Simulator,name=iPhone 16,OS=latest
         - only_testing: $BITRISE_TEST_SHARDS_PATH/shard_2.txt
     - deploy-to-bitrise-io@2.26.2:
