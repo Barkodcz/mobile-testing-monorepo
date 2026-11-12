@@ -241,16 +241,18 @@ builds, not guessed:
 | --- | --- | --- |
 | 1 | Maestro on iOS | Code complete (flows, workflow); **blocked** on the unresolved CI launch-denial issue (#1 above) |
 | 2 | Maestro on React Native (Android + iOS) | Android side **done, verified passing**; iOS side **blocked** on the same unresolved issue |
-| 3a | XCUITest sharded pipeline | Code complete after the product_path, intermediate-files, and shard-file-discovery fixes; re-verification in progress |
+| 3a | XCUITest sharded pipeline | **Done, verified passing** — build→calc→shard-1/shard-2 all succeeded, each shard its own Tests tab entry |
 | 3b | Maestro sharded pipeline (Android) | **Done, verified passing** — shard 3 correctly skips with 0 flows at the default shard count |
 | 4 | Android instrumentation on VDT | **Written, needs you to enable the add-on** — see secrets table |
 | 5 | Appium local (Android + iOS) | Android side **done, verified passing**; iOS side **blocked** on the same unresolved issue |
 | 6 | Classic XCTest next to Swift Testing | **Done, verified** — both classes show separately in the Tests tab |
 | 7 | fastlane `scan` variant | **Done, verified passing** |
 
-All code for every scenario is written, additive, and committed. The only unresolved item is the
+All code for every scenario is written, additive, and committed. 5 of 7 scenarios (plus the
+Android side of 2 and 5) are fully verified passing. The only unresolved item is the
 iOS-simulator-direct-launch issue affecting the iOS side of scenarios 1, 2, and 5 — a CI
-environment issue external to this repo's code, documented in detail above.
+environment issue external to this repo's code, documented in detail above. Scenario 4 just
+needs the VDT add-on enabled.
 
 ## Shard assignment (confirmed live)
 
