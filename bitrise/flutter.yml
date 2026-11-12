@@ -41,7 +41,8 @@ workflows:
         inputs:
         - content: cp -r apps/flutter/test/goldens/failures "$BITRISE_DEPLOY_DIR/golden-failures" 2>/dev/null || true
     - save-dart-cache@1: {}
-    - deploy-to-bitrise-io@2: {}
+    - deploy-to-bitrise-io@2.26.2:
+        is_always_run: true
 
   flutter_record_goldens:
     summary: Manual helper. Records golden images on Linux so you can download and commit them.
@@ -56,7 +57,8 @@ workflows:
             flutter pub get
             flutter test --update-goldens test/goldens
             cp test/goldens/*.png "$BITRISE_DEPLOY_DIR/"
-    - deploy-to-bitrise-io@2: {}
+    - deploy-to-bitrise-io@2.26.2:
+        is_always_run: true
 
   flutter_integration_tests:
     summary: integration_test on an Android emulator, converted to JUnit XML.
@@ -86,14 +88,15 @@ workflows:
             mkdir -p test-results
             flutter test integration_test -d "$BITRISE_EMULATOR_SERIAL" --machine \
               | dart pub global run junitreport:tojunit --output test-results/integration.xml
-    - custom-test-results-export@1:
+    - custom-test-results-export@2.0.0:
         is_always_run: true
         inputs:
         - test_name: Flutter integration tests
         - base_path: $BITRISE_SOURCE_DIR/apps/flutter/test-results
         - search_pattern: "*/integration.xml"
     - save-dart-cache@1: {}
-    - deploy-to-bitrise-io@2: {}
+    - deploy-to-bitrise-io@2.26.2:
+        is_always_run: true
 
   flutter_patrol_android:
     summary: Patrol tests (Flutter + native interactions) on an Android emulator.
@@ -145,11 +148,12 @@ workflows:
             zip -qr "$BITRISE_DEPLOY_DIR/patrol-html-report.zip" build/app/reports/androidTests 2>/dev/null || true
             # Patrol pulls screenshots (on-demand + screenshot_on_failure) to test_directory/screenshots.
             zip -qr "$BITRISE_DEPLOY_DIR/patrol-screenshots.zip" patrol_test/screenshots 2>/dev/null || true
-    - custom-test-results-export@1:
+    - custom-test-results-export@2.0.0:
         is_always_run: true
         inputs:
         - test_name: Patrol (Android)
         - base_path: $BITRISE_SOURCE_DIR/apps/flutter/test-results
         - search_pattern: "*/patrol.xml"
     - save-dart-cache@1: {}
-    - deploy-to-bitrise-io@2: {}
+    - deploy-to-bitrise-io@2.26.2:
+        is_always_run: true

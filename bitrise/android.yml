@@ -29,7 +29,8 @@ workflows:
         - module: app
         - variant: debug
     - save-gradle-cache@1: {}
-    - deploy-to-bitrise-io@2: {}
+    - deploy-to-bitrise-io@2.26.2:
+        is_always_run: true
 
   android_snapshot_tests:
     summary: Paparazzi screenshot tests, compared with the committed snapshots.
@@ -54,14 +55,15 @@ workflows:
             # Gradle writes one XML per test class; the export step takes one file.
             npx --yes junit-report-merger test-results/paparazzi.xml "app/build/test-results/testDebugUnitTest/*.xml"
             cp -r app/build/paparazzi/failures "$BITRISE_DEPLOY_DIR/paparazzi-failures" 2>/dev/null || true
-    - custom-test-results-export@1:
+    - custom-test-results-export@2.0.0:
         is_always_run: true
         inputs:
         - test_name: Paparazzi snapshots
         - base_path: $BITRISE_SOURCE_DIR/apps/android/test-results
         - search_pattern: "*/paparazzi.xml"
     - save-gradle-cache@1: {}
-    - deploy-to-bitrise-io@2: {}
+    - deploy-to-bitrise-io@2.26.2:
+        is_always_run: true
 
   android_record_snapshots:
     summary: Manual helper. Records Paparazzi snapshots on CI so you can download and commit them.
@@ -75,7 +77,8 @@ workflows:
             set -eo pipefail
             ./gradlew :app:recordPaparazziDebug
             cd app/src/test && zip -r "$BITRISE_DEPLOY_DIR/paparazzi-snapshots.zip" snapshots
-    - deploy-to-bitrise-io@2: {}
+    - deploy-to-bitrise-io@2.26.2:
+        is_always_run: true
 
   android_ui_tests:
     summary: Compose UI tests (instrumented) on an Android emulator.
@@ -103,4 +106,5 @@ workflows:
         - main_apk_path: $BITRISE_APK_PATH
         - test_apk_path: $BITRISE_TEST_APK_PATH
     - save-gradle-cache@1: {}
-    - deploy-to-bitrise-io@2: {}
+    - deploy-to-bitrise-io@2.26.2:
+        is_always_run: true

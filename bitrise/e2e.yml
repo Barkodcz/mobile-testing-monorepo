@@ -54,7 +54,8 @@ workflows:
         - test_name: Maestro E2E (Android)
         - num_flaky_test_attempts: 1
     - save-gradle-cache@1: {}
-    - deploy-to-bitrise-io@2: {}
+    - deploy-to-bitrise-io@2.26.2:
+        is_always_run: true
 
   appium_browserstack:
     summary: Appium tests on real BrowserStack devices. Needs BROWSERSTACK_USERNAME and BROWSERSTACK_ACCESS_KEY secrets.
@@ -81,7 +82,7 @@ workflows:
             pip install -q -r requirements.txt
             mkdir -p test-results
             pytest tests --junitxml=test-results/appium.xml
-    - custom-test-results-export@1:
+    - custom-test-results-export@2.0.0:
         is_always_run: true
         inputs:
         - test_name: Appium on BrowserStack
@@ -95,4 +96,5 @@ workflows:
         # copied directories, so zip the screenshots folder instead of cp -r.
         - content: zip -qr "$BITRISE_DEPLOY_DIR/appium-screenshots.zip" e2e/appium/test-results/screenshots 2>/dev/null || true
     - save-gradle-cache@1: {}
-    - deploy-to-bitrise-io@2: {}
+    - deploy-to-bitrise-io@2.26.2:
+        is_always_run: true

@@ -35,14 +35,15 @@ workflows:
             set -eo pipefail
             # jest.config.js adds the jest-junit reporter -> test-results/jest-junit.xml
             npx jest --ci
-    - custom-test-results-export@1:
+    - custom-test-results-export@2.0.0:
         is_always_run: true
         inputs:
         - test_name: Jest (React Native)
         - base_path: $BITRISE_SOURCE_DIR/apps/react-native/test-results
         - search_pattern: "*/jest-junit.xml"
     - save-npm-cache@1: {}
-    - deploy-to-bitrise-io@2: {}
+    - deploy-to-bitrise-io@2.26.2:
+        is_always_run: true
 
   rn_detox_ios:
     summary: Detox E2E tests on an iOS simulator (release build).
@@ -71,7 +72,7 @@ workflows:
             # --take-screenshots all: the explicit device.takeScreenshot() calls in the
             # tests are no-ops on disk under "failing" mode unless the test actually fails.
             npx detox test --configuration ios.sim.release --cleanup --record-logs failing --take-screenshots all
-    - custom-test-results-export@1:
+    - custom-test-results-export@2.0.0:
         is_always_run: true
         inputs:
         - test_name: Detox E2E (iOS)
@@ -85,4 +86,5 @@ workflows:
         # copied directories, so zip the artifacts folder instead of cp -r.
         - content: zip -qr "$BITRISE_DEPLOY_DIR/detox-artifacts.zip" apps/react-native/artifacts 2>/dev/null || true
     - save-npm-cache@1: {}
-    - deploy-to-bitrise-io@2: {}
+    - deploy-to-bitrise-io@2.26.2:
+        is_always_run: true

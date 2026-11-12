@@ -51,7 +51,8 @@ workflows:
         - content: |
             # First run records missing references here; download and commit them.
             if [ -d __Snapshots__ ]; then zip -qr "$BITRISE_DEPLOY_DIR/ios-snapshots.zip" __Snapshots__; fi
-    - deploy-to-bitrise-io@2: {}
+    - deploy-to-bitrise-io@2.26.2:
+        is_always_run: true
 
   ios_ui_tests:
     summary: XCUITest UI tests on an iOS simulator.
@@ -66,4 +67,5 @@ workflows:
         - project_path: apps/ios/CounterApp.xcodeproj
         - scheme: CounterApp-UI
         - destination: platform=iOS Simulator,name=iPhone 16,OS=latest
-    - deploy-to-bitrise-io@2: {}
+    - deploy-to-bitrise-io@2.26.2:
+        is_always_run: true
