@@ -88,13 +88,10 @@ workflows:
         - test_name: Appium on BrowserStack
         - base_path: $BITRISE_SOURCE_DIR/e2e/appium/test-results
         - search_pattern: "*/appium.xml"
-    - script@1:
-        title: Keep Appium screenshots
-        is_always_run: true
-        inputs:
-        # deploy-to-bitrise-io only picks up files in the deploy dir, not raw
-        # copied directories, so zip the screenshots folder instead of cp -r.
-        - content: zip -qr "$BITRISE_DEPLOY_DIR/appium-screenshots.zip" e2e/appium/test-results/screenshots 2>/dev/null || true
+        # conftest.py's driver fixture writes the per-test screenshot and (if
+        # RECORD_VIDEO calls for it) the recording directly into test-results/
+        # using the <classname>__<name>__<label>.<ext> convention, so this
+        # Step attaches them automatically -- no separate zip/copy step needed.
     - save-gradle-cache@1: {}
     - deploy-to-bitrise-io@2.26.2:
         is_always_run: true
