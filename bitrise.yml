@@ -25,6 +25,11 @@ app:
   - ANDROID_DIR: apps/android
   - RN_DIR: apps/react-native
   - FLUTTER_DIR: apps/flutter
+  # Controls video recording across every UI/E2E test suite: all | failures | off.
+  # Where a framework supports "keep only on failure" natively (Detox, Patrol),
+  # this maps to it directly. Where it doesn't, scripts/recording helpers delete
+  # the video for passing tests before export. Default: failures.
+  - RECORD_VIDEO: failures
 
 # Manual-only pipeline that runs every fast suite at once (no triggers).
 # Start it from the Bitrise UI: Start build > Pipeline > everything_fast.
