@@ -91,14 +91,14 @@ near-verbatim ported to iOS/RN by swapping `appId`.
   here) → `virtual-device-testing-for-android@1.3.6` with `test_type: instrumentation`,
   `download_test_results: true`, device list from a `VDT_DEVICE_LIST` env var (default to 1-2
   cheap devices, e.g. `NexusLowRes,24,en,portrait`).
-- **🚧 BLOCKER, needs your input**: Virtual Device Testing requires Firebase Test Lab access —
-  specifically a **Google Cloud / Firebase service account JSON key added as a Bitrise Generic
-  File Storage item or secret**, referenced as the Step's `service_account_json_key_path`
-  input, plus a Firebase project GCP billing account (VDT is metered). I can write the
-  workflow fully, but it **cannot run until you add that credential and tell me the
-  project/env var name to reference**. Flagging now rather than after writing it, since this
-  matches the exact shape of the BrowserStack-secrets blocker from earlier in this repo's
-  history.
+- **~~BLOCKER~~ Correction (originally written, since corrected)**: this plan originally assumed
+  VDT needed a Firebase/GCP service account credential as a Bitrise secret, same shape as the
+  BrowserStack blocker. That assumption was wrong. Checked `virtual-device-testing-for-android`'s
+  actual inputs via `step_inputs`: its `api_token` input already defaults to
+  `$ADDON_VDTESTING_API_TOKEN`, which Bitrise auto-provisions the moment the **Virtual Device
+  Testing add-on** is enabled on this app (Bitrise dashboard → app → Add-ons). No Firebase/GCP
+  project, service account JSON, or separate billing setup is needed on your end — just enable
+  the add-on. See the final-status table below.
 - **Risk**: none to existing — `android_ui_tests` (local emulator) is untouched.
 
 ### 5. Appium against local emulator and simulator
@@ -156,22 +156,97 @@ near-verbatim ported to iOS/RN by swapping `appId`.
 
 ## Summary of things that need your input before/during implementation
 
-1. **VDT (scenario 4) is blocked on a Firebase service account credential** — same shape of
-   blocker as the still-unresolved BrowserStack secrets. I'll write the workflow regardless (so
-   it's ready the moment the credential exists) but can't verify it runs.
+1. ~~VDT (scenario 4) is blocked on a Firebase service account credential~~ **Corrected**: just
+   enable the Virtual Device Testing add-on in the Bitrise dashboard (Add-ons tab) — no separate
+   credential needed. See the secrets table below.
 2. **Scenario 5 touches `e2e/appium/conftest.py`** (shared file) — purely additive (new env var
-   branch, old behavior preserved under the existing default), but flagging since the task
-   rules single out shared-file edits for extra care.
-3. **Shard counts for 3a/3b are constrained by how few tests this sample app has** — I'll
-   implement the mechanism faithfully (configurable via env var) but some shards will
-   legitimately run zero tests at the defaults given in the task. Not a bug, just the reality
-   of a demo app with 2 UI tests / 2 Maestro flows.
-4. Given the sheer size of this task (7 scenarios, several multi-stage pipelines), I'd like to
-   confirm pacing before starting: build and push one scenario at a time, same cadence as the
-   recording/reporting work earlier this session (commit + push + live-verify after each,
-   status update after each, no per-commit confirmation needed)?
+   branch, old behavior preserved under the existing default). Diff reviewed, BrowserStack path
+   (`APPIUM_TARGET` unset or `browserstack`) is byte-for-byte unchanged.
+3. **Shard counts for 3a/3b are constrained by how few tests this sample app has** — implemented
+   faithfully (configurable via env var), and as flagged up front, some shards legitimately run
+   zero tests/flows at the task's own default counts. See the shard-assignment notes below for
+   the exact, confirmed-live mapping.
+4. Pacing confirmed: build and push one scenario at a time, commit + push + live-verify after
+   each, no per-commit confirmation.
 
-## Build order (proposed)
-Easiest/lowest-risk first, same philosophy as before: **6 (XCTest) → 1 (iOS Maestro) → 2 (RN
-Maestro) → 7 (fastlane scan) → 5 (Appium local) → 4 (VDT, writable but unverifiable) → 3a/3b
-(sharding, most complex, most Bitrise-specific machinery)**.
+## Build order (as actually built)
+**6 (XCTest) → 1 (iOS Maestro) → 2 (RN Maestro) → 7 (fastlane scan) → 5 (Appium local) → 4 (VDT,
+written, add-on not yet enabled) → 3b (Maestro sharded) → 3a (XCUITest sharded)**.
+
+## Real bugs found and fixed during live verification
+
+None of these were anticipated in the discovery phase above; all confirmed via real Bitrise
+builds, not guessed:
+
+1. **`xcode-build-for-simulator` runs `xcodebuild archive`**, which doesn't honor
+   `ONLY_ACTIVE_ARCH` for simulator destinations the way `xcodebuild test`/`build` do. On
+   Bitrise's arm64 (Apple Silicon) Mac runners this silently produced a binary whose simulator
+   architecture didn't match the runner — surfacing as an opaque `SBMainWorkspace` launch denial
+   in Maestro and an explicit "Simulator architecture is not supported" in Appium. Fixed by
+   pinning `ARCHS: arm64` / excluding `x86_64` for the simulator SDK in `apps/ios/project.yml`
+   (affects `ios-maestro-e2e`, `ios-maestro-e2e-rn`, `ios-appium-local`).
+2. **`simctl boot` returning before SpringBoard is actually ready**, and even a confirmed full
+   boot (`simctl bootstatus -b`) wasn't sufficient — `simctl launch`-based tools (Maestro,
+   Appium) additionally needed the `Simulator.app` GUI process itself running. Fixed with
+   `open -a Simulator` after boot.
+3. **`ios-appium-local`'s hardcoded `platform_version` default (`18.0`)** didn't match any
+   simulator SDK actually installed on the stack (`18.4`/`18.5`/`18.6`/`16.4`/`17.5` at the time).
+   Fixed by capturing the exact UDID of the simulator CI already booted and built into, and
+   having Appium attach via `udid` instead of re-resolving by version.
+4. **`xcode-test-shard-calculation`'s `product_path` input wants the `.xctestrun` file**
+   (formats: xctestrun/xctestproducts), not the raw test bundle directory — fixed by pointing it
+   at `BITRISE_XCTESTRUN_FILE_PATH`.
+5. **Pipeline intermediate files broke the `.xctestrun`'s relative path to the built `.app`**:
+   `BITRISE_XCTESTRUN_FILE_PATH` is a file *inside* `BITRISE_TEST_BUNDLE_PATH`'s own directory
+   tree, and the `.xctestrun` references the `.app` via a path relative to that tree. Listing
+   both as separate pipeline intermediate files makes `pull-intermediate-files` extract them
+   into two different, isolated directories downstream, breaking that reference. Fixed by
+   passing only the bundle directory through the pipeline and re-locating the `.xctestrun` file
+   inside it with `find` at each downstream stage.
+6. **A classic `set -e -o pipefail` + empty-glob bug** in the Maestro sharding script: `ls
+   nonexistent-glob | wc -l` inside a `$(...)` aborts the whole script when a shard has zero
+   matching flow files (because `ls` exits nonzero on no match, and `pipefail` propagates that
+   even though `wc -l` itself succeeds) — before the `run_if`-controlling env var ever got set.
+   Fixed by switching the count to `find`, which doesn't error on zero matches.
+7. **Classic RN Metro-bundler gotcha** (scenario 2): debug builds need the Metro bundler running
+   to render anything; a debug APK/simulator build showed neither the counter label nor the
+   buttons. Fixed by building `Release` configuration instead (both Android Gradle and iOS
+   `xcode-build-for-simulator`), which embeds the JS bundle.
+
+## Final status per scenario
+
+| # | Scenario | Status |
+| --- | --- | --- |
+| 1 | Maestro on iOS | Android-equivalent journeys ported; blocked on the ARCHS/Simulator.app fixes above, re-verifying now |
+| 2 | Maestro on React Native (Android + iOS) | Android side **verified passing**; iOS side re-verifying after the same ARCHS fix |
+| 3a | XCUITest sharded pipeline | Written; re-verifying after the product_path + intermediate-files fixes above |
+| 3b | Maestro sharded pipeline (Android) | **Done, verified passing** — shard 3 correctly skips with 0 flows at the default shard count |
+| 4 | Android instrumentation on VDT | **Written, needs you to enable the add-on** — see secrets table |
+| 5 | Appium local (Android + iOS) | Android side **verified passing**; iOS side re-verifying after the ARCHS fix |
+| 6 | Classic XCTest next to Swift Testing | **Done, verified** — both classes show separately in the Tests tab |
+| 7 | fastlane `scan` variant | **Done, verified passing** |
+
+(Re-verification in progress as of this writing — see the "Real bugs found and fixed" list
+above for what each fix addressed; this table will be updated to final pass/fail once those
+builds finish.)
+
+## Shard assignment (confirmed live)
+
+- **3a (`ios_xcuitest_sharded`)**: `xcode-test-shard-calculation` with `shard_calculation:
+  alphabetically` splits `CounterApp-UI`'s 2 test methods across `XCUITEST_SHARD_COUNT` (default
+  2) shards — one test per shard at the default.
+- **3b (`android_maestro_sharded`)**: manual round-robin by alphabetical flow filename,
+  `ls e2e/maestro/counter_*.yaml | sort | awk 'NR % N == <index>'`. At the default
+  `MAESTRO_SHARD_COUNT=3` with the repo's 2 flow files: shard 1 runs `counter_basic.yaml` (1 mod
+  3 = 1), shard 2 runs `counter_reset.yaml` (2 mod 3 = 2), shard 3 runs nothing (no index mod 3
+  == 0) — its `maestro-test` step is skipped via `run_if` rather than failing on "no flows
+  found".
+
+## Secrets / accounts you need to add in Bitrise
+
+- **Virtual Device Testing add-on** (Bitrise dashboard → this app → Add-ons → enable Virtual
+  Device Testing) — required for `android-espresso-vdt` (scenario 4) to run. No separate
+  Firebase/GCP credential: once enabled, `virtual-device-testing-for-android`'s `api_token`
+  input resolves from the auto-provisioned `$ADDON_VDTESTING_API_TOKEN`.
+- `BROWSERSTACK_USERNAME` / `BROWSERSTACK_ACCESS_KEY` — unchanged, pre-existing requirement for
+  `appium_browserstack`, not part of this round of scenarios.
