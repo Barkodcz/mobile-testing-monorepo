@@ -137,18 +137,22 @@ workflows:
         - scheme: CounterApp-UI
         - destination: platform=iOS Simulator,name=iPhone 16,OS=latest
     - script@1:
+        title: Ad-hoc codesign the built app
+        inputs:
+        # xcode-build-for-simulator disables signing (CODE_SIGNING_ALLOWED=NO)
+        # for its archive-based build. xcodebuild test/ios_ui_tests tolerates
+        # an unsigned app because XCTest's own test harness launches it, but
+        # a bare `simctl launch` (what Maestro/Appium do) gets denied by
+        # SpringBoard on iOS 18.x simulators for an unsigned app --
+        # "SBMainWorkspace" (confirmed live across 3 separate attempts at
+        # other fixes, builds #98/#108/#119/#127). Ad-hoc signing fixes it.
+        - content: codesign --force --deep --sign - "$BITRISE_APP_DIR_PATH"
+    - script@1:
         title: Boot simulator for Maestro
         inputs:
-        # bootstatus -b alone wasn't enough -- the SBMainWorkspace denial
-        # persisted even after confirming full boot (build #108). This is a
-        # known CI quirk: simctl launch-based tools need the actual
-        # Simulator.app GUI process running, not just a headless-booted
-        # device, or SpringBoard refuses to open the app.
         - content: |
             xcrun simctl boot "iPhone 16" 2>/dev/null || true
             xcrun simctl bootstatus "iPhone 16" -b
-            open -a Simulator
-            sleep 5
     - maestro-test@1:
         inputs:
         - app_path: $BITRISE_APP_DIR_PATH
@@ -236,12 +240,6 @@ workflows:
             set -eo pipefail
             xcrun simctl boot "iPhone 16" 2>/dev/null || true
             xcrun simctl bootstatus "iPhone 16" -b
-            # Headless-booted isn't enough for simctl-launch-based tools --
-            # the Simulator.app GUI process needs to actually be running or
-            # SpringBoard denies the launch (SBMainWorkspace, confirmed live
-            # on ios-maestro-e2e #108 with an otherwise-successful boot).
-            open -a Simulator
-            sleep 5
             # Hand Appium the exact UDID of the simulator we just booted,
             # instead of a hardcoded platform_version -- the build step
             # below uses OS=latest, which drifts across stack updates and
@@ -261,6 +259,17 @@ workflows:
         - project_path: apps/ios/CounterApp.xcodeproj
         - scheme: CounterApp-UI
         - destination: platform=iOS Simulator,name=iPhone 16,OS=latest
+    - script@1:
+        title: Ad-hoc codesign the built app
+        inputs:
+        # xcode-build-for-simulator disables signing (CODE_SIGNING_ALLOWED=NO).
+        # xcodebuild test tolerates an unsigned app since its own test
+        # harness does the launching, but Appium's direct simctl-level
+        # launch was denied by SpringBoard on iOS 18.x simulators for an
+        # unsigned app ("Simulator architecture is not supported" was this
+        # same underlying signing issue surfacing as a misleading message,
+        # confirmed live build #129). Ad-hoc signing fixes it.
+        - content: codesign --force --deep --sign - "$BITRISE_APP_DIR_PATH"
     - script@1:
         title: Run Appium tests (local iOS)
         inputs:
@@ -432,12 +441,20 @@ workflows:
         inputs:
         - artifact_sources: ios-xcuitest-shard-calc
     - script@1:
-        title: Locate the .xctestrun file inside the pulled test bundle
+        title: Locate the .xctestrun file and this shard's test-selection file
         inputs:
         - content: |
             set -eo pipefail
             XCTESTRUN_FILE_PATH="$(find "$BITRISE_TEST_BUNDLE_PATH" -maxdepth 1 -name '*.xctestrun' | head -1)"
             envman add --key XCTESTRUN_FILE_PATH --value "$XCTESTRUN_FILE_PATH"
+            # xcode-test-shard-calculation's output filenames aren't
+            # documented -- rather than guess a naming convention (which
+            # failed live: "shard_1.txt" doesn't exist, and the Step then
+            # misparsed the literal nonexistent path as a test identifier,
+            # "Tests in target 'var' can't be run"), take the Nth file
+            # alphabetically for shard N.
+            ONLY_TESTING_PATH="$(find "$BITRISE_TEST_SHARDS_PATH" -maxdepth 1 -type f | sort | sed -n '1p')"
+            envman add --key ONLY_TESTING_PATH --value "$ONLY_TESTING_PATH"
     - script@1:
         title: Boot simulator
         inputs:
@@ -446,10 +463,7 @@ workflows:
         inputs:
         - xctestrun: $XCTESTRUN_FILE_PATH
         - destination: platform=iOS Simulator,name=iPhone 16,OS=latest
-        # xcode-test-shard-calculation writes one file per shard under
-        # $BITRISE_TEST_SHARDS_PATH; exact naming confirmed via a live run
-        # (see docs/new-test-scenarios-plan.md for the final value).
-        - only_testing: $BITRISE_TEST_SHARDS_PATH/shard_1.txt
+        - only_testing: $ONLY_TESTING_PATH
     - deploy-to-bitrise-io@2.26.2:
         is_always_run: true
 
@@ -466,12 +480,14 @@ workflows:
         inputs:
         - artifact_sources: ios-xcuitest-shard-calc
     - script@1:
-        title: Locate the .xctestrun file inside the pulled test bundle
+        title: Locate the .xctestrun file and this shard's test-selection file
         inputs:
         - content: |
             set -eo pipefail
             XCTESTRUN_FILE_PATH="$(find "$BITRISE_TEST_BUNDLE_PATH" -maxdepth 1 -name '*.xctestrun' | head -1)"
             envman add --key XCTESTRUN_FILE_PATH --value "$XCTESTRUN_FILE_PATH"
+            ONLY_TESTING_PATH="$(find "$BITRISE_TEST_SHARDS_PATH" -maxdepth 1 -type f | sort | sed -n '2p')"
+            envman add --key ONLY_TESTING_PATH --value "$ONLY_TESTING_PATH"
     - script@1:
         title: Boot simulator
         inputs:
@@ -480,6 +496,6 @@ workflows:
         inputs:
         - xctestrun: $XCTESTRUN_FILE_PATH
         - destination: platform=iOS Simulator,name=iPhone 16,OS=latest
-        - only_testing: $BITRISE_TEST_SHARDS_PATH/shard_2.txt
+        - only_testing: $ONLY_TESTING_PATH
     - deploy-to-bitrise-io@2.26.2:
         is_always_run: true

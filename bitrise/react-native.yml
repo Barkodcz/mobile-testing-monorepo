@@ -175,18 +175,21 @@ workflows:
         - configuration: Release
         - destination: platform=iOS Simulator,name=iPhone 16,OS=latest
     - script@1:
+        title: Ad-hoc codesign the built app
+        inputs:
+        # xcode-build-for-simulator disables signing (CODE_SIGNING_ALLOWED=NO).
+        # xcodebuild test tolerates an unsigned app since its own test
+        # harness does the launching, but a bare `simctl launch` (what
+        # Maestro does) was denied by SpringBoard on iOS 18.x simulators for
+        # an unsigned app -- "SBMainWorkspace" (confirmed live, same root
+        # cause as ios-maestro-e2e). Ad-hoc signing fixes it.
+        - content: codesign --force --deep --sign - "$BITRISE_APP_DIR_PATH"
+    - script@1:
         title: Boot simulator for Maestro
         inputs:
-        # bootstatus -b alone wasn't enough to avoid the SBMainWorkspace
-        # denial (confirmed on ios-maestro-e2e #108, which still failed
-        # after a fully-confirmed boot) -- simctl-launch-based tools need
-        # the Simulator.app GUI process actually running, not just a
-        # headless-booted device.
         - content: |
             xcrun simctl boot "iPhone 16" 2>/dev/null || true
             xcrun simctl bootstatus "iPhone 16" -b
-            open -a Simulator
-            sleep 5
     - maestro-test@1:
         inputs:
         - app_path: $BITRISE_APP_DIR_PATH
