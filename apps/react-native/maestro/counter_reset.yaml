@@ -1,0 +1,16 @@
+# Same journey as the Detox test "increments and resets" (the reset half)
+# in apps/react-native/e2e/counter.e2e.js -- see maestro/README.md.
+appId: com.counterrn
+name: Reset brings the counter back to zero
+---
+- startRecording: recording
+- launchApp:
+    clearState: true
+- tapOn:
+    id: "increment_button"
+- assertVisible: "Count: 1"
+- tapOn:
+    id: "reset_button"
+- assertVisible: "Count: 0"
+- takeScreenshot: after_reset
+- stopRecording

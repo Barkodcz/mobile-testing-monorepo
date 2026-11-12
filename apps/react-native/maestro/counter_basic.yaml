@@ -1,0 +1,22 @@
+# Same journey as the Detox test "shows the initial count" + part of
+# "increments and resets" in apps/react-native/e2e/counter.e2e.js -- see
+# maestro/README.md for the full mapping.
+#
+# appId defaults to the Android package; the iOS workflow overrides it at
+# runtime with `maestro test --app-id org.reactjs.native.example.CounterRN`
+# (via the Step's additional_args input) so one flow file covers both
+# platforms instead of forking it.
+appId: com.counterrn
+name: Counter starts at zero and increments
+---
+- startRecording: recording
+- launchApp:
+    clearState: true
+- assertVisible: "Count: 0"
+- tapOn:
+    id: "increment_button"
+- tapOn:
+    id: "increment_button"
+- assertVisible: "Count: 2"
+- takeScreenshot: after_increment
+- stopRecording

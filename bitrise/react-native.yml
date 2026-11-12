@@ -98,3 +98,81 @@ workflows:
     - save-npm-cache@1: {}
     - deploy-to-bitrise-io@2.26.2:
         is_always_run: true
+
+  android-maestro-e2e-rn:
+    summary: >
+      Maestro flows against the React Native app's Android build -- covers
+      the same journeys as the Detox suite above, see
+      apps/react-native/maestro/README.md for the test-by-test mapping.
+      Manual-trigger only, not added to the `react_native` pipeline, so it
+      doesn't add emulator minutes to every push alongside Detox.
+    meta:
+      bitrise.io:
+        stack: ubuntu-noble-24.04-bitrise-2025-android
+        machine_type_id: g2.linux.large
+    steps:
+    - git-clone@8: {}
+    - restore-npm-cache@2: {}
+    - npm@1:
+        inputs:
+        - workdir: $BITRISE_SOURCE_DIR/apps/react-native
+        - command: ci
+    - avd-manager@1:
+        inputs:
+        - profile: pixel_6
+        - api_level: "34"
+        - tag: google_apis
+        - abi: x86_64
+    - script@1:
+        title: Build debug APK
+        inputs:
+        - working_dir: $BITRISE_SOURCE_DIR/apps/react-native/android
+        - content: ./gradlew :app:assembleDebug
+    - wait-for-android-emulator@1: {}
+    - maestro-test@1:
+        inputs:
+        - app_path: $BITRISE_SOURCE_DIR/apps/react-native/android/app/build/outputs/apk/debug/app-debug.apk
+        - flow_path: $BITRISE_SOURCE_DIR/apps/react-native/maestro
+        - test_name: Maestro E2E (React Native / Android)
+        - maestro_version: 2.11.0
+        - num_flaky_test_attempts: 1
+    - save-npm-cache@1: {}
+    - deploy-to-bitrise-io@2.26.2:
+        is_always_run: true
+
+  ios-maestro-e2e-rn:
+    summary: >
+      Same Maestro flows as android-maestro-e2e-rn, against the React Native
+      app's iOS build. Overrides the flow files' Android appId at runtime
+      since one set of flows covers both platforms -- see
+      apps/react-native/maestro/README.md. Manual-trigger only.
+    meta:
+      bitrise.io:
+        stack: osx-xcode-16.4.x
+        machine_type_id: g2.mac.medium
+    steps:
+    - git-clone@8: {}
+    - restore-npm-cache@2: {}
+    - npm@1:
+        inputs:
+        - workdir: $BITRISE_SOURCE_DIR/apps/react-native
+        - command: ci
+    - cocoapods-install@2:
+        inputs:
+        - source_root_path: $BITRISE_SOURCE_DIR/apps/react-native/ios
+    - xcode-build-for-simulator@3.0.3:
+        inputs:
+        - project_path: apps/react-native/ios/CounterRN.xcworkspace
+        - scheme: CounterRN
+        - destination: platform=iOS Simulator,name=iPhone 16,OS=latest
+    - maestro-test@1:
+        inputs:
+        - app_path: $BITRISE_APP_DIR_PATH
+        - flow_path: $BITRISE_SOURCE_DIR/apps/react-native/maestro
+        - test_name: Maestro E2E (React Native / iOS)
+        - maestro_version: 2.11.0
+        - num_flaky_test_attempts: 1
+        - additional_args: --app-id org.reactjs.native.example.CounterRN
+    - save-npm-cache@1: {}
+    - deploy-to-bitrise-io@2.26.2:
+        is_always_run: true
