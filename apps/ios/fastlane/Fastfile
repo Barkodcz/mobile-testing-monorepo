@@ -6,7 +6,7 @@ platform :ios do
     scan(
       project: "CounterApp.xcodeproj",
       scheme: "CounterApp-UI",
-      devices: ["iPhone 16"],
+      devices: ["Bitrise iOS default"],
       output_directory: "test-results",
       output_types: "junit",
       output_files: "xcuitest.xml",

@@ -173,7 +173,7 @@ workflows:
         - project_path: apps/react-native/ios/CounterRN.xcworkspace
         - scheme: CounterRN
         - configuration: Release
-        - destination: platform=iOS Simulator,name=iPhone 16,OS=latest
+        - destination: platform=iOS Simulator,name=Bitrise iOS default,OS=latest
     - script@1.2.1:
         title: Ad-hoc codesign the built app
         inputs:
@@ -188,8 +188,8 @@ workflows:
         title: Boot simulator for Maestro
         inputs:
         - content: |
-            xcrun simctl boot "iPhone 16" 2>/dev/null || true
-            xcrun simctl bootstatus "iPhone 16" -b
+            xcrun simctl boot "Bitrise iOS default" 2>/dev/null || true
+            xcrun simctl bootstatus "Bitrise iOS default" -b
     - maestro-test@1.2.0:
         inputs:
         - app_path: $BITRISE_APP_DIR_PATH

@@ -108,7 +108,7 @@ def ios_driver(request):
         options.udid = ios_udid
     else:
         options.platform_version = os.environ.get("APPIUM_IOS_OS_VERSION", "18.0")
-    options.device_name = os.environ.get("APPIUM_IOS_DEVICE", "iPhone 16")
+    options.device_name = os.environ.get("APPIUM_IOS_DEVICE", "Bitrise iOS default")
     drv = webdriver.Remote(
         os.environ.get("APPIUM_SERVER_URL", "http://localhost:4723"), options=options
     )

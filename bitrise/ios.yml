@@ -59,7 +59,7 @@ workflows:
         inputs:
         - project_path: apps/ios/CounterApp.xcodeproj
         - scheme: CounterApp-Unit
-        - destination: platform=iOS Simulator,name=iPhone 16,OS=latest
+        - destination: platform=iOS Simulator,name=Bitrise iOS default,OS=latest
     - script@1.2.1:
         title: Keep snapshot reference images
         is_always_run: true
@@ -93,14 +93,14 @@ workflows:
         title: Boot simulator and start recording
         inputs:
         - content: |
-            xcrun simctl boot "iPhone 16" 2>/dev/null || true
+            xcrun simctl boot "Bitrise iOS default" 2>/dev/null || true
             $BITRISE_SOURCE_DIR/scripts/recording/start-ios-sim.sh booted \
               $BITRISE_SOURCE_DIR/recordings/ios-ui-tests.mov
     - xcode-test@6.6.1:
         inputs:
         - project_path: apps/ios/CounterApp.xcodeproj
         - scheme: CounterApp-UI
-        - destination: platform=iOS Simulator,name=iPhone 16,OS=latest
+        - destination: platform=iOS Simulator,name=Bitrise iOS default,OS=latest
     - script@1.2.1:
         title: Stop recording and keep it as a build artifact
         is_always_run: true
@@ -135,7 +135,7 @@ workflows:
         # since we're not invoking the test action here.
         - project_path: apps/ios/CounterApp.xcodeproj
         - scheme: CounterApp-UI
-        - destination: platform=iOS Simulator,name=iPhone 16,OS=latest
+        - destination: platform=iOS Simulator,name=Bitrise iOS default,OS=latest
     - script@1.2.1:
         title: Ad-hoc codesign the built app
         inputs:
@@ -151,8 +151,8 @@ workflows:
         title: Boot simulator for Maestro
         inputs:
         - content: |
-            xcrun simctl boot "iPhone 16" 2>/dev/null || true
-            xcrun simctl bootstatus "iPhone 16" -b
+            xcrun simctl boot "Bitrise iOS default" 2>/dev/null || true
+            xcrun simctl bootstatus "Bitrise iOS default" -b
     - maestro-test@1.2.0:
         inputs:
         - app_path: $BITRISE_APP_DIR_PATH
@@ -182,7 +182,7 @@ workflows:
         inputs:
         - content: |
             gem install fastlane -v '~> 2.223' --no-document
-            xcrun simctl boot "iPhone 16" 2>/dev/null || true
+            xcrun simctl boot "Bitrise iOS default" 2>/dev/null || true
             $BITRISE_SOURCE_DIR/scripts/recording/start-ios-sim.sh booted \
               $BITRISE_SOURCE_DIR/recordings/ios-fastlane-scan.mov
     - script@1.2.1:
@@ -238,15 +238,15 @@ workflows:
         inputs:
         - content: |
             set -eo pipefail
-            xcrun simctl boot "iPhone 16" 2>/dev/null || true
-            xcrun simctl bootstatus "iPhone 16" -b
+            xcrun simctl boot "Bitrise iOS default" 2>/dev/null || true
+            xcrun simctl bootstatus "Bitrise iOS default" -b
             # Hand Appium the exact UDID of the simulator we just booted,
             # instead of a hardcoded platform_version -- the build step
             # below uses OS=latest, which drifts across stack updates and
             # previously caused "'18.0' does not exist in the list of
             # simctl SDKs" (confirmed live on build #102).
             IOS_SIM_UDID="$(xcrun simctl list devices booted -j \
-              | python3 -c "import json,sys; d=json.load(sys.stdin)['devices']; print(next(x['udid'] for v in d.values() for x in v if x['name']=='iPhone 16'))")"
+              | python3 -c "import json,sys; d=json.load(sys.stdin)['devices']; print(next(x['udid'] for v in d.values() for x in v if x['name']=='Bitrise iOS default'))")"
             envman add --key APPIUM_IOS_UDID --value "$IOS_SIM_UDID"
             npm install -g appium@2.11.0
             appium driver install xcuitest@7.29.0
@@ -258,7 +258,7 @@ workflows:
         inputs:
         - project_path: apps/ios/CounterApp.xcodeproj
         - scheme: CounterApp-UI
-        - destination: platform=iOS Simulator,name=iPhone 16,OS=latest
+        - destination: platform=iOS Simulator,name=Bitrise iOS default,OS=latest
     - script@1.2.1:
         title: Ad-hoc codesign the built app
         inputs:
@@ -278,7 +278,7 @@ workflows:
             set -eo pipefail
             export APPIUM_SERVER_URL=http://localhost:4723/wd/hub
             export APPIUM_IOS_APP_PATH="$BITRISE_APP_DIR_PATH"
-            export APPIUM_IOS_DEVICE="iPhone 16"
+            export APPIUM_IOS_DEVICE="Bitrise iOS default"
             # APPIUM_IOS_UDID is already in the env, exported by envman in
             # the previous step.
             python3 -m venv .venv && . .venv/bin/activate
@@ -318,7 +318,7 @@ workflows:
         title: Boot simulator and start recording
         inputs:
         - content: |
-            xcrun simctl boot "iPhone 16" 2>/dev/null || true
+            xcrun simctl boot "Bitrise iOS default" 2>/dev/null || true
             gem list -i xcpretty >/dev/null 2>&1 || gem install xcpretty --no-document
             $BITRISE_SOURCE_DIR/scripts/recording/start-ios-sim.sh booted \
               $BITRISE_SOURCE_DIR/recordings/ios-ui-tests-manual.mov
@@ -332,7 +332,7 @@ workflows:
             xcodebuild test \
               -project CounterApp.xcodeproj \
               -scheme CounterApp-UI \
-              -destination "platform=iOS Simulator,name=iPhone 16,OS=latest" \
+              -destination "platform=iOS Simulator,name=Bitrise iOS default,OS=latest" \
               | xcpretty --report junit --output test-results/xcuitest.xml
     - script@1.2.1:
         title: Stop recording and attach it to the Tests tab
@@ -458,11 +458,11 @@ workflows:
     - script@1.2.1:
         title: Boot simulator
         inputs:
-        - content: xcrun simctl boot "iPhone 16" 2>/dev/null || true
+        - content: xcrun simctl boot "Bitrise iOS default" 2>/dev/null || true
     - xcode-test-without-building@1.0.1:
         inputs:
         - xctestrun: $XCTESTRUN_FILE_PATH
-        - destination: platform=iOS Simulator,name=iPhone 16,OS=latest
+        - destination: platform=iOS Simulator,name=Bitrise iOS default,OS=latest
         - only_testing: $ONLY_TESTING_PATH
     - deploy-to-bitrise-io@2.26.2:
         is_always_run: true
@@ -491,11 +491,11 @@ workflows:
     - script@1.2.1:
         title: Boot simulator
         inputs:
-        - content: xcrun simctl boot "iPhone 16" 2>/dev/null || true
+        - content: xcrun simctl boot "Bitrise iOS default" 2>/dev/null || true
     - xcode-test-without-building@1.0.1:
         inputs:
         - xctestrun: $XCTESTRUN_FILE_PATH
-        - destination: platform=iOS Simulator,name=iPhone 16,OS=latest
+        - destination: platform=iOS Simulator,name=Bitrise iOS default,OS=latest
         - only_testing: $ONLY_TESTING_PATH
     - deploy-to-bitrise-io@2.26.2:
         is_always_run: true
