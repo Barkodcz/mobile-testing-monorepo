@@ -178,17 +178,39 @@ written, add-on not yet enabled) → 3b (Maestro sharded) → 3a (XCUITest shard
 None of these were anticipated in the discovery phase above; all confirmed via real Bitrise
 builds, not guessed:
 
-1. **`xcode-build-for-simulator` runs `xcodebuild archive`**, which doesn't honor
-   `ONLY_ACTIVE_ARCH` for simulator destinations the way `xcodebuild test`/`build` do. On
-   Bitrise's arm64 (Apple Silicon) Mac runners this silently produced a binary whose simulator
-   architecture didn't match the runner — surfacing as an opaque `SBMainWorkspace` launch denial
-   in Maestro and an explicit "Simulator architecture is not supported" in Appium. Fixed by
-   pinning `ARCHS: arm64` / excluding `x86_64` for the simulator SDK in `apps/ios/project.yml`
-   (affects `ios-maestro-e2e`, `ios-maestro-e2e-rn`, `ios-appium-local`).
-2. **`simctl boot` returning before SpringBoard is actually ready**, and even a confirmed full
-   boot (`simctl bootstatus -b`) wasn't sufficient — `simctl launch`-based tools (Maestro,
-   Appium) additionally needed the `Simulator.app` GUI process itself running. Fixed with
-   `open -a Simulator` after boot.
+1. **UNRESOLVED, genuine CI-environment blocker**: `ios-maestro-e2e`, `ios-maestro-e2e-rn`, and
+   `ios-appium-local` all fail installing/launching the built `.app` directly via `simctl`
+   (which is what Maestro and Appium's XCUITest driver do), while `xcode-test`/`xcodebuild test`
+   (`ios_ui_tests`, `ios_ui_tests_manual`) — which launch through Xcode's own test harness
+   instead — work fine with the exact same app. Maestro reports `FBSOpenApplicationServiceErrorDomain`
+   / denied by `SBMainWorkspace`; Appium reports "Simulator architecture is not supported by the
+   ... application". Four distinct, independently-plausible fixes were tried live and **none
+   resolved it**:
+   - `xcrun simctl bootstatus -b` after boot, to rule out a boot-race (boot was confirmed fully
+     complete — took 40-60s — and the error still occurred).
+   - `open -a Simulator` to ensure the GUI process (not just a headless-booted device) is
+     running (no change).
+   - Pinning `ARCHS: arm64` / excluding `x86_64` for the simulator SDK in
+     `apps/ios/project.yml`, in case `xcodebuild archive` (what `xcode-build-for-simulator`
+     actually runs, even for a simulator destination) produced a binary arch mismatch on
+     Bitrise's arm64 Mac runners (no change — and the resulting `.xctestrun`/xcresult filenames
+     still read `arm64-x86_64` regardless, suggesting this setting wasn't the lever that matters
+     here, or Xcode's naming doesn't reflect it).
+   - Ad-hoc codesigning the built `.app` (`codesign --force --deep --sign -`), since
+     `xcode-build-for-simulator`'s own xcconfig forces `CODE_SIGNING_ALLOWED=NO` and iOS 18.x
+     simulators are known to sometimes deny direct-launch of unsigned apps while tolerating them
+     under a test harness (no change).
+   - The fact that this hits **two unrelated app codebases** (native `CounterApp`/XcodeGen and
+     the React Native app/CocoaPods) with the **identical** failure mode is a strong signal this
+     is a property of the Bitrise macOS stack / Xcode 16.4 / iOS 18.x simulator combination
+     itself, not of either app's build configuration. Recommended next steps for whoever picks
+     this up: compare against a plain non-CI (local Apple Silicon Mac) repro; try an older/newer
+     `osx-xcode-*` stack; or file it with Bitrise/mobile.dev (Maestro) support with the exact
+     `FBSOpenApplicationServiceErrorDomain` text above, since it reproduces outside of anything
+     in this repo's control.
+   - **Left in place**: the `bootstatus -b` wait (legitimate regardless) and the ad-hoc codesign
+     step (harmless, may matter on other stacks) in `ios-maestro-e2e`, `ios-maestro-e2e-rn`, and
+     `ios-appium-local`. The `ARCHS`/`EXCLUDED_ARCHS` pin stays in `project.yml` too (harmless).
 3. **`ios-appium-local`'s hardcoded `platform_version` default (`18.0`)** didn't match any
    simulator SDK actually installed on the stack (`18.4`/`18.5`/`18.6`/`16.4`/`17.5` at the time).
    Fixed by capturing the exact UDID of the simulator CI already booted and built into, and
@@ -217,18 +239,18 @@ builds, not guessed:
 
 | # | Scenario | Status |
 | --- | --- | --- |
-| 1 | Maestro on iOS | Android-equivalent journeys ported; blocked on the ARCHS/Simulator.app fixes above, re-verifying now |
-| 2 | Maestro on React Native (Android + iOS) | Android side **verified passing**; iOS side re-verifying after the same ARCHS fix |
-| 3a | XCUITest sharded pipeline | Written; re-verifying after the product_path + intermediate-files fixes above |
+| 1 | Maestro on iOS | Code complete (flows, workflow); **blocked** on the unresolved CI launch-denial issue (#1 above) |
+| 2 | Maestro on React Native (Android + iOS) | Android side **done, verified passing**; iOS side **blocked** on the same unresolved issue |
+| 3a | XCUITest sharded pipeline | Code complete after the product_path, intermediate-files, and shard-file-discovery fixes; re-verification in progress |
 | 3b | Maestro sharded pipeline (Android) | **Done, verified passing** — shard 3 correctly skips with 0 flows at the default shard count |
 | 4 | Android instrumentation on VDT | **Written, needs you to enable the add-on** — see secrets table |
-| 5 | Appium local (Android + iOS) | Android side **verified passing**; iOS side re-verifying after the ARCHS fix |
+| 5 | Appium local (Android + iOS) | Android side **done, verified passing**; iOS side **blocked** on the same unresolved issue |
 | 6 | Classic XCTest next to Swift Testing | **Done, verified** — both classes show separately in the Tests tab |
 | 7 | fastlane `scan` variant | **Done, verified passing** |
 
-(Re-verification in progress as of this writing — see the "Real bugs found and fixed" list
-above for what each fix addressed; this table will be updated to final pass/fail once those
-builds finish.)
+All code for every scenario is written, additive, and committed. The only unresolved item is the
+iOS-simulator-direct-launch issue affecting the iOS side of scenarios 1, 2, and 5 — a CI
+environment issue external to this repo's code, documented in detail above.
 
 ## Shard assignment (confirmed live)
 
