@@ -121,9 +121,13 @@ workflows:
         title: Stop screen recording
         is_always_run: true
         inputs:
-        - content: $BITRISE_SOURCE_DIR/scripts/recording/stop-android.sh /sdcard/bitrise-recordings $BITRISE_SOURCE_DIR/recordings
+        - content: |
+            SCREENSHOT="$($BITRISE_SOURCE_DIR/scripts/recording/screenshot-android.sh \
+              $BITRISE_SOURCE_DIR/recordings/integration-test-final.png)"
+            [ -n "$SCREENSHOT" ] && echo "Took a final-state screenshot: $SCREENSHOT"
+            $BITRISE_SOURCE_DIR/scripts/recording/stop-android.sh /sdcard/bitrise-recordings $BITRISE_SOURCE_DIR/recordings
     - script@1:
-        title: Attach the recording
+        title: Attach the recording and screenshot
         is_always_run: true
         inputs:
         - working_dir: $BITRISE_SOURCE_DIR/apps/flutter
@@ -139,6 +143,14 @@ workflows:
                 --dest-dir test-results
             else
               echo "No recording found, exporting test results without a video attachment."
+            fi
+            if [ -s "$BITRISE_SOURCE_DIR/recordings/integration-test-final.png" ]; then
+              python3 "$BITRISE_SOURCE_DIR/scripts/reporting/attach_media_to_junit.py" add-recording-testcase \
+                --junit-xml test-results/integration.xml \
+                --classname counter_flutter.integration_test.app_test \
+                --media "$BITRISE_SOURCE_DIR/recordings/integration-test-final.png" \
+                --label screenshot --always \
+                --dest-dir test-results
             fi
     - custom-test-results-export@2.0.0:
         is_always_run: true
@@ -207,8 +219,21 @@ workflows:
             # deploy-to-bitrise-io only picks up files in the deploy dir, not raw
             # copied directories, so zip these instead of cp -r.
             zip -qr "$BITRISE_DEPLOY_DIR/patrol-html-report.zip" build/app/reports/androidTests 2>/dev/null || true
-            # Patrol pulls screenshots (on-demand + screenshot_on_failure) to test_directory/screenshots.
+            # Patrol pulls screenshots (on-demand + screenshot_on_failure) to
+            # test_directory/screenshots/<classname>/<name>/<timestamp>_<label>.png --
+            # that <classname>/<name> already matches the JUnit testcase exactly, so
+            # attach each one to its real test case instead of only zipping them.
             zip -qr "$BITRISE_DEPLOY_DIR/patrol-screenshots.zip" patrol_test/screenshots 2>/dev/null || true
+            if [ -d patrol_test/screenshots ]; then
+              find patrol_test/screenshots -type f -name "*.png" | while read -r f; do
+                test_name="$(basename "$(dirname "$f")")"
+                test_classname="$(basename "$(dirname "$(dirname "$f")")")"
+                label="$(basename "$f" .png | sed -E 's/^[0-9]+_//')"
+                python3 "$BITRISE_SOURCE_DIR/scripts/reporting/attach_media_to_junit.py" rename \
+                  --classname "$test_classname" --name "$test_name" --media "$f" \
+                  --label "$label" --dest-dir test-results
+              done
+            fi
             RECORDING="$("$BITRISE_SOURCE_DIR/scripts/recording/concat-chunks.sh" \
               "$BITRISE_SOURCE_DIR/recordings/bitrise-recordings/patrol_chunk*.mp4" \
               "$BITRISE_SOURCE_DIR/recordings/patrol_combined.mp4")"

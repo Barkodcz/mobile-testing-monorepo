@@ -69,7 +69,11 @@ def suite_has_failures(testsuites_root: ET.Element) -> bool:
 
 
 def cmd_add_recording_testcase(args: argparse.Namespace) -> int:
-    mode = record_video_mode()
+    # --always (used for cheap artifacts like screenshots, where the goal is
+    # "attach as many as possible") skips the $RECORD_VIDEO gating entirely --
+    # that gating exists to avoid uploading a video from every passing run,
+    # not to limit screenshots.
+    mode = "all" if args.always else record_video_mode()
     if mode == "off":
         print("[attach] RECORD_VIDEO=off, skipping recording attachment.")
         return 0
@@ -203,6 +207,10 @@ def main() -> int:
     p1.add_argument("--media", required=True)
     p1.add_argument("--label", default="video")
     p1.add_argument("--dest-dir", required=True)
+    p1.add_argument(
+        "--always", action="store_true",
+        help="Attach regardless of $RECORD_VIDEO (for cheap artifacts like screenshots).",
+    )
     p1.set_defaults(func=cmd_add_recording_testcase)
 
     p3 = sub.add_parser("attach-to-first-failure")
