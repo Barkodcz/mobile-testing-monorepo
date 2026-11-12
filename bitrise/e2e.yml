@@ -25,6 +25,20 @@ pipelines:
         changed_files:
           regex: '^(apps/android/.*|e2e/appium/.*|bitrise/e2e\.yml)$'
 
+  # Scenario 3b: build the debug APK once, shard the existing Maestro flows
+  # across MAESTRO_SHARD_COUNT (default 3) parallel workflows, each reporting
+  # its own Tests tab entry. Start this PIPELINE from the Bitrise UI (not any
+  # one of its workflows directly). See docs/new-test-scenarios-plan.md.
+  android_maestro_sharded:
+    workflows:
+      android-maestro-shard-build: {}
+      android-maestro-shard-1:
+        depends_on: [android-maestro-shard-build]
+      android-maestro-shard-2:
+        depends_on: [android-maestro-shard-build]
+      android-maestro-shard-3:
+        depends_on: [android-maestro-shard-build]
+
 workflows:
   maestro_android:
     summary: Maestro flows against the native Android app on an emulator.
@@ -157,5 +171,175 @@ workflows:
         - base_path: $BITRISE_SOURCE_DIR/e2e/appium/test-results
         - search_pattern: "*/appium-local.xml"
     - save-gradle-cache@1: {}
+    - deploy-to-bitrise-io@2.26.2:
+        is_always_run: true
+
+  android-maestro-shard-build:
+    summary: >
+      Stage 1/2 of the sharded Maestro pipeline (scenario 3b): builds the
+      debug APK once, shared with the shard workflows via pipeline
+      intermediate files. Part of the android_maestro_sharded pipeline --
+      don't start this workflow directly.
+    meta:
+      bitrise.io:
+        stack: ubuntu-noble-24.04-bitrise-2025-android
+        machine_type_id: g2.linux.medium
+    steps:
+    - git-clone@8: {}
+    - restore-gradle-cache@2: {}
+    - script@1:
+        title: Build debug APK
+        inputs:
+        - working_dir: $BITRISE_SOURCE_DIR/apps/android
+        - content: |
+            set -eo pipefail
+            ./gradlew :app:assembleDebug
+            envman add --key MAESTRO_SHARD_APK_PATH \
+              --value "$BITRISE_SOURCE_DIR/apps/android/app/build/outputs/apk/debug/app-debug.apk"
+    - save-gradle-cache@1: {}
+    - deploy-to-bitrise-io@2.26.2:
+        is_always_run: true
+        inputs:
+        - pipeline_intermediate_files: MAESTRO_SHARD_APK_PATH
+
+  android-maestro-shard-1:
+    summary: >
+      Shard 1/MAESTRO_SHARD_COUNT of the sharded Maestro pipeline (scenario
+      3b). Flow assignment: round-robin by alphabetical flow filename --
+      `ls e2e/maestro/counter_*.yaml | sort | awk 'NR % N == 1'`. At the
+      default MAESTRO_SHARD_COUNT=3 with the repo's current 2 flow files
+      (counter_basic.yaml, counter_reset.yaml), this shard runs
+      counter_basic.yaml (index 1 mod 3 == 1).
+    meta:
+      bitrise.io:
+        stack: ubuntu-noble-24.04-bitrise-2025-android
+        machine_type_id: g2.linux.large
+    steps:
+    - git-clone@8: {}
+    - pull-intermediate-files@1.3.7:
+        inputs:
+        - artifact_sources: android-maestro-shard-build
+    - avd-manager@1:
+        inputs:
+        - profile: pixel_6
+        - api_level: "34"
+        - tag: google_apis
+        - abi: x86_64
+    - script@1:
+        title: Assign this shard's flows
+        inputs:
+        - content: |
+            set -eo pipefail
+            mkdir -p /tmp/maestro-shard-1
+            cp "$BITRISE_SOURCE_DIR/e2e/maestro/config.yaml" /tmp/maestro-shard-1/
+            ls "$BITRISE_SOURCE_DIR"/e2e/maestro/counter_*.yaml | sort \
+              | awk -v n="${MAESTRO_SHARD_COUNT:-3}" 'NR % n == 1' \
+              | xargs -I{} cp {} /tmp/maestro-shard-1/
+            COUNT=$(ls /tmp/maestro-shard-1/counter_*.yaml 2>/dev/null | wc -l | tr -d ' ')
+            echo "Shard 1: $COUNT flow(s) assigned"
+            envman add --key MAESTRO_SHARD_HAS_FLOWS --value "$([ "$COUNT" -gt 0 ] && echo true || echo false)"
+    - wait-for-android-emulator@1: {}
+    - maestro-test@1:
+        run_if: '{{enveq "MAESTRO_SHARD_HAS_FLOWS" "true"}}'
+        inputs:
+        - app_path: $MAESTRO_SHARD_APK_PATH
+        - flow_path: /tmp/maestro-shard-1
+        - test_name: Maestro shard 1 (Android)
+        - maestro_version: 2.11.0
+        - num_flaky_test_attempts: 1
+    - deploy-to-bitrise-io@2.26.2:
+        is_always_run: true
+
+  android-maestro-shard-2:
+    summary: >
+      Shard 2/MAESTRO_SHARD_COUNT, same mechanism as android-maestro-shard-1.
+      At the default MAESTRO_SHARD_COUNT=3, runs counter_reset.yaml (index 2
+      mod 3 == 2).
+    meta:
+      bitrise.io:
+        stack: ubuntu-noble-24.04-bitrise-2025-android
+        machine_type_id: g2.linux.large
+    steps:
+    - git-clone@8: {}
+    - pull-intermediate-files@1.3.7:
+        inputs:
+        - artifact_sources: android-maestro-shard-build
+    - avd-manager@1:
+        inputs:
+        - profile: pixel_6
+        - api_level: "34"
+        - tag: google_apis
+        - abi: x86_64
+    - script@1:
+        title: Assign this shard's flows
+        inputs:
+        - content: |
+            set -eo pipefail
+            mkdir -p /tmp/maestro-shard-2
+            cp "$BITRISE_SOURCE_DIR/e2e/maestro/config.yaml" /tmp/maestro-shard-2/
+            ls "$BITRISE_SOURCE_DIR"/e2e/maestro/counter_*.yaml | sort \
+              | awk -v n="${MAESTRO_SHARD_COUNT:-3}" 'NR % n == 2' \
+              | xargs -I{} cp {} /tmp/maestro-shard-2/
+            COUNT=$(ls /tmp/maestro-shard-2/counter_*.yaml 2>/dev/null | wc -l | tr -d ' ')
+            echo "Shard 2: $COUNT flow(s) assigned"
+            envman add --key MAESTRO_SHARD_HAS_FLOWS --value "$([ "$COUNT" -gt 0 ] && echo true || echo false)"
+    - wait-for-android-emulator@1: {}
+    - maestro-test@1:
+        run_if: '{{enveq "MAESTRO_SHARD_HAS_FLOWS" "true"}}'
+        inputs:
+        - app_path: $MAESTRO_SHARD_APK_PATH
+        - flow_path: /tmp/maestro-shard-2
+        - test_name: Maestro shard 2 (Android)
+        - maestro_version: 2.11.0
+        - num_flaky_test_attempts: 1
+    - deploy-to-bitrise-io@2.26.2:
+        is_always_run: true
+
+  android-maestro-shard-3:
+    summary: >
+      Shard 3/MAESTRO_SHARD_COUNT, same mechanism as android-maestro-shard-1.
+      At the default MAESTRO_SHARD_COUNT=3, this shard legitimately runs 0
+      flows (index mod 3 == 0 matches neither of the repo's 2 flow files) --
+      the maestro-test Step is skipped via run_if in that case rather than
+      failing with "no flows found". Demonstrates the sharding mechanism
+      honestly for a sample app this small; see
+      docs/new-test-scenarios-plan.md.
+    meta:
+      bitrise.io:
+        stack: ubuntu-noble-24.04-bitrise-2025-android
+        machine_type_id: g2.linux.large
+    steps:
+    - git-clone@8: {}
+    - pull-intermediate-files@1.3.7:
+        inputs:
+        - artifact_sources: android-maestro-shard-build
+    - avd-manager@1:
+        inputs:
+        - profile: pixel_6
+        - api_level: "34"
+        - tag: google_apis
+        - abi: x86_64
+    - script@1:
+        title: Assign this shard's flows
+        inputs:
+        - content: |
+            set -eo pipefail
+            mkdir -p /tmp/maestro-shard-3
+            cp "$BITRISE_SOURCE_DIR/e2e/maestro/config.yaml" /tmp/maestro-shard-3/
+            ls "$BITRISE_SOURCE_DIR"/e2e/maestro/counter_*.yaml | sort \
+              | awk -v n="${MAESTRO_SHARD_COUNT:-3}" 'NR % n == 0' \
+              | xargs -I{} cp {} /tmp/maestro-shard-3/
+            COUNT=$(ls /tmp/maestro-shard-3/counter_*.yaml 2>/dev/null | wc -l | tr -d ' ')
+            echo "Shard 3: $COUNT flow(s) assigned"
+            envman add --key MAESTRO_SHARD_HAS_FLOWS --value "$([ "$COUNT" -gt 0 ] && echo true || echo false)"
+    - wait-for-android-emulator@1: {}
+    - maestro-test@1:
+        run_if: '{{enveq "MAESTRO_SHARD_HAS_FLOWS" "true"}}'
+        inputs:
+        - app_path: $MAESTRO_SHARD_APK_PATH
+        - flow_path: /tmp/maestro-shard-3
+        - test_name: Maestro shard 3 (Android)
+        - maestro_version: 2.11.0
+        - num_flaky_test_attempts: 1
     - deploy-to-bitrise-io@2.26.2:
         is_always_run: true

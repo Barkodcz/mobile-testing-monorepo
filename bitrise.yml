@@ -38,6 +38,11 @@ app:
   # CounterApp-UI only has 2 test methods, so there's little point going
   # higher by default -- override in the Bitrise UI to demonstrate more.
   - XCUITEST_SHARD_COUNT: "2"
+  # Scenario 3b: number of shards for the android_maestro_sharded pipeline.
+  # Default 3 per the task spec, even though e2e/maestro/ only has 2 flow
+  # files -- one shard legitimately runs 0 flows at this default, see
+  # docs/new-test-scenarios-plan.md.
+  - MAESTRO_SHARD_COUNT: "3"
 
 # Manual-only pipeline that runs every fast suite at once (no triggers).
 # Start it from the Bitrise UI: Start build > Pipeline > everything_fast.
