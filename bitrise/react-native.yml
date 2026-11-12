@@ -174,6 +174,12 @@ workflows:
         - scheme: CounterRN
         - configuration: Release
         - destination: platform=iOS Simulator,name=Bitrise iOS default,OS=latest
+        # Forces the simulator SDK explicitly -- `xcodebuild archive` doesn't
+        # reliably resolve it from -destination alone: it produced a
+        # device-platform binary that simctl refused to install ("has code
+        # for platforms: [iOS, arm64]... device can run: iOS-simulator",
+        # confirmed live on this exact workflow).
+        - xcodebuild_options: -sdk iphonesimulator
     - script@1.2.1:
         title: Ad-hoc codesign the built app
         inputs:

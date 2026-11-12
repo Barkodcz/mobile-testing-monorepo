@@ -136,6 +136,13 @@ workflows:
         - project_path: apps/ios/CounterApp.xcodeproj
         - scheme: CounterApp-UI
         - destination: platform=iOS Simulator,name=Bitrise iOS default,OS=latest
+        # The Step runs `xcodebuild archive`, which -- unlike `build`/`test`
+        # -- doesn't reliably resolve to the simulator SDK from -destination
+        # alone: it produced a device-platform binary ("has code for
+        # platforms: [iOS, arm64]... device can run: iOS-simulator",
+        # confirmed live) that simctl then refuses to install. Forcing
+        # -sdk iphonesimulator makes the platform unambiguous.
+        - xcodebuild_options: -sdk iphonesimulator
     - script@1.2.1:
         title: Ad-hoc codesign the built app
         inputs:
@@ -259,6 +266,9 @@ workflows:
         - project_path: apps/ios/CounterApp.xcodeproj
         - scheme: CounterApp-UI
         - destination: platform=iOS Simulator,name=Bitrise iOS default,OS=latest
+        # Forces the simulator SDK explicitly -- `xcodebuild archive` doesn't
+        # reliably resolve it from -destination alone, see ios-maestro-e2e.
+        - xcodebuild_options: -sdk iphonesimulator
     - script@1.2.1:
         title: Ad-hoc codesign the built app
         inputs:
