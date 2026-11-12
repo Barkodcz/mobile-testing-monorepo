@@ -235,7 +235,7 @@ workflows:
             ls "$BITRISE_SOURCE_DIR"/e2e/maestro/counter_*.yaml | sort \
               | awk -v n="${MAESTRO_SHARD_COUNT:-3}" 'NR % n == 1' \
               | xargs -I{} cp {} /tmp/maestro-shard-1/
-            COUNT=$(ls /tmp/maestro-shard-1/counter_*.yaml 2>/dev/null | wc -l | tr -d ' ')
+            COUNT=$(find /tmp/maestro-shard-1 -maxdepth 1 -name 'counter_*.yaml' | wc -l | tr -d ' ')
             echo "Shard 1: $COUNT flow(s) assigned"
             envman add --key MAESTRO_SHARD_HAS_FLOWS --value "$([ "$COUNT" -gt 0 ] && echo true || echo false)"
     - wait-for-android-emulator@1: {}
@@ -280,7 +280,7 @@ workflows:
             ls "$BITRISE_SOURCE_DIR"/e2e/maestro/counter_*.yaml | sort \
               | awk -v n="${MAESTRO_SHARD_COUNT:-3}" 'NR % n == 2' \
               | xargs -I{} cp {} /tmp/maestro-shard-2/
-            COUNT=$(ls /tmp/maestro-shard-2/counter_*.yaml 2>/dev/null | wc -l | tr -d ' ')
+            COUNT=$(find /tmp/maestro-shard-2 -maxdepth 1 -name 'counter_*.yaml' | wc -l | tr -d ' ')
             echo "Shard 2: $COUNT flow(s) assigned"
             envman add --key MAESTRO_SHARD_HAS_FLOWS --value "$([ "$COUNT" -gt 0 ] && echo true || echo false)"
     - wait-for-android-emulator@1: {}
@@ -329,7 +329,7 @@ workflows:
             ls "$BITRISE_SOURCE_DIR"/e2e/maestro/counter_*.yaml | sort \
               | awk -v n="${MAESTRO_SHARD_COUNT:-3}" 'NR % n == 0' \
               | xargs -I{} cp {} /tmp/maestro-shard-3/
-            COUNT=$(ls /tmp/maestro-shard-3/counter_*.yaml 2>/dev/null | wc -l | tr -d ' ')
+            COUNT=$(find /tmp/maestro-shard-3 -maxdepth 1 -name 'counter_*.yaml' | wc -l | tr -d ' ')
             echo "Shard 3: $COUNT flow(s) assigned"
             envman add --key MAESTRO_SHARD_HAS_FLOWS --value "$([ "$COUNT" -gt 0 ] && echo true || echo false)"
     - wait-for-android-emulator@1: {}

@@ -177,12 +177,16 @@ workflows:
     - script@1:
         title: Boot simulator for Maestro
         inputs:
-        # bootstatus -b blocks until SpringBoard is ready, otherwise the
-        # simctl launch maestro-test does right after boot gets rejected
-        # (SBMainWorkspace denial) -- same bug hit on ios-maestro-e2e #98.
+        # bootstatus -b alone wasn't enough to avoid the SBMainWorkspace
+        # denial (confirmed on ios-maestro-e2e #108, which still failed
+        # after a fully-confirmed boot) -- simctl-launch-based tools need
+        # the Simulator.app GUI process actually running, not just a
+        # headless-booted device.
         - content: |
             xcrun simctl boot "iPhone 16" 2>/dev/null || true
             xcrun simctl bootstatus "iPhone 16" -b
+            open -a Simulator
+            sleep 5
     - maestro-test@1:
         inputs:
         - app_path: $BITRISE_APP_DIR_PATH

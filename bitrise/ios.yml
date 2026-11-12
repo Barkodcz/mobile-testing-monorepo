@@ -139,14 +139,16 @@ workflows:
     - script@1:
         title: Boot simulator for Maestro
         inputs:
-        # bootstatus -b blocks until SpringBoard is actually ready. Without
-        # it, simctl boot returns immediately and the very next simctl
-        # launch (done internally by maestro-test) gets rejected with
-        # "FBSOpenApplicationServiceErrorDomain... denied by SBMainWorkspace"
-        # -- confirmed live on build #98.
+        # bootstatus -b alone wasn't enough -- the SBMainWorkspace denial
+        # persisted even after confirming full boot (build #108). This is a
+        # known CI quirk: simctl launch-based tools need the actual
+        # Simulator.app GUI process running, not just a headless-booted
+        # device, or SpringBoard refuses to open the app.
         - content: |
             xcrun simctl boot "iPhone 16" 2>/dev/null || true
             xcrun simctl bootstatus "iPhone 16" -b
+            open -a Simulator
+            sleep 5
     - maestro-test@1:
         inputs:
         - app_path: $BITRISE_APP_DIR_PATH
@@ -234,6 +236,12 @@ workflows:
             set -eo pipefail
             xcrun simctl boot "iPhone 16" 2>/dev/null || true
             xcrun simctl bootstatus "iPhone 16" -b
+            # Headless-booted isn't enough for simctl-launch-based tools --
+            # the Simulator.app GUI process needs to actually be running or
+            # SpringBoard denies the launch (SBMainWorkspace, confirmed live
+            # on ios-maestro-e2e #108 with an otherwise-successful boot).
+            open -a Simulator
+            sleep 5
             # Hand Appium the exact UDID of the simulator we just booted,
             # instead of a hardcoded platform_version -- the build step
             # below uses OS=latest, which drifts across stack updates and
