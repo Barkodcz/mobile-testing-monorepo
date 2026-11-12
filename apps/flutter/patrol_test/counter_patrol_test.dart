@@ -14,6 +14,7 @@ void main() {
     await $(#increment_button).tap();
     await $(#increment_button).tap();
     expect($('Count: 2'), findsOneWidget);
+    await $.takeNativeScreenshot('after_increment');
 
     // Native: leave the app and come back. Plain integration_test can't do this.
     await $.platform.mobile.pressHome();
@@ -22,6 +23,7 @@ void main() {
 
     await $(#reset_button).tap();
     expect($('Count: 0'), findsOneWidget);
+    await $.takeNativeScreenshot('after_reset');
   });
 
   patrolTest('notification shade can be opened over the app', ($) async {
@@ -32,5 +34,6 @@ void main() {
 
     await $('Increment').tap(); // find by visible text
     expect($('Count: 1'), findsOneWidget);
+    await $.takeNativeScreenshot('notification_shade_closed');
   });
 }

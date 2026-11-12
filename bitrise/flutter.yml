@@ -141,6 +141,8 @@ workflows:
             # Patrol runs Gradle connected tests; AGP writes one XML per device here.
             npx --yes junit-report-merger test-results/patrol.xml "build/app/outputs/androidTest-results/**/*.xml"
             cp -r build/app/reports/androidTests "$BITRISE_DEPLOY_DIR/patrol-html-report" 2>/dev/null || true
+            # Patrol pulls screenshots (on-demand + screenshot_on_failure) to test_directory/screenshots.
+            cp -r patrol_test/screenshots "$BITRISE_DEPLOY_DIR/patrol-screenshots" 2>/dev/null || true
     - custom-test-results-export@1:
         is_always_run: true
         inputs:

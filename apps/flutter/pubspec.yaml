@@ -25,6 +25,7 @@ flutter:
 patrol:
   app_name: Counter Flutter
   test_directory: patrol_test
+  screenshot_on_failure: true   # needs patrol_cli 4.8.0+ and patrol 4.10.0+ (both pinned)
   android:
     package_name: io.bitrise.sample.counter_flutter
   ios:
