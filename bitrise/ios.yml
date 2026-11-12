@@ -393,7 +393,11 @@ workflows:
         - artifact_sources: ios-xcuitest-shard-build
     - xcode-test-shard-calculation@0.2.1:
         inputs:
-        - product_path: $BITRISE_TEST_BUNDLE_PATH
+        # product_path wants the .xctestrun file itself (supported formats:
+        # xctestrun / xctestproducts) -- BITRISE_TEST_BUNDLE_PATH is the raw
+        # test bundle directory and fails with "unsupported test products
+        # file extension" (confirmed live, build #112).
+        - product_path: $BITRISE_XCTESTRUN_FILE_PATH
         - shard_count: $XCUITEST_SHARD_COUNT
     - deploy-to-bitrise-io@2.26.2:
         is_always_run: true
