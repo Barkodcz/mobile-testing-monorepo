@@ -54,7 +54,14 @@ workflows:
             mkdir -p test-results
             # Gradle writes one XML per test class; the export step takes one file.
             npx --yes junit-report-merger test-results/paparazzi.xml "app/build/test-results/testDebugUnitTest/*.xml"
-            cp -r app/build/paparazzi/failures "$BITRISE_DEPLOY_DIR/paparazzi-failures" 2>/dev/null || true
+            # BitriseSnapshotHandler (BitrisePaparazzi.kt) already names these
+            # per the <classname>__<name>__<label>.png convention; copying
+            # them flat into the export base_path is enough for
+            # custom-test-results-export to attach them to their test case.
+            cp app/build/bitrise-snapshots/*/*.png test-results/ 2>/dev/null || true
+            # Keep the full failures dir as a browsable artifact too (zipped,
+            # since deploy-to-bitrise-io ignores raw copied directories).
+            zip -qr "$BITRISE_DEPLOY_DIR/paparazzi-failures.zip" app/build/paparazzi/failures 2>/dev/null || true
     - custom-test-results-export@2.0.0:
         is_always_run: true
         inputs:

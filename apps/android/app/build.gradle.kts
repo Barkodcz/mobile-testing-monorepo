@@ -41,6 +41,23 @@ android {
     }
 }
 
+// BitrisePaparazzi.kt needs real JDK classes (ImageIO, BufferedImage) to save
+// per-test-case diff images; Kotlin JVM test compilation excludes the JDK by
+// default, so re-enable it for unit test compile tasks only. Also point each
+// Test task's snapshot output at build/bitrise-snapshots/<task-name> and
+// expose the task name as a system property, both read by
+// BitriseSnapshotHandler to build the attachment's file name convention.
+tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinJvmCompile>().configureEach {
+    if ("UnitTest" in name) compilerOptions.noJdk.set(false)
+}
+
+tasks.withType<Test>().configureEach {
+    val snapshots = layout.buildDirectory.dir("bitrise-snapshots/$name")
+    systemProperty("bitrise.test.task", name)
+    outputs.dir(snapshots)
+    doFirst { snapshots.get().asFile.deleteRecursively() }
+}
+
 dependencies {
     val composeBom = platform("androidx.compose:compose-bom:2024.12.01")
     implementation(composeBom)
