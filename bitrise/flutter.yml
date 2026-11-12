@@ -22,11 +22,11 @@ pipelines:
 workflows:
   _flutter_setup:
     steps:
-    - git-clone@8: {}
-    - flutter-installer@0:
+    - git-clone@8.5.2: {}
+    - flutter-installer@1.1.1:
         inputs:
         - version: stable
-    - restore-dart-cache@1: {}
+    - restore-dart-cache@3.0.2: {}
 
   flutter_tests:
     summary: >
@@ -37,7 +37,7 @@ workflows:
       golden tests are a still-image diff, not a live screen.
     before_run: [_flutter_setup]
     steps:
-    - script@1:
+    - script@1.2.1:
         title: Run flutter test
         inputs:
         - working_dir: $BITRISE_SOURCE_DIR/apps/flutter
@@ -46,7 +46,7 @@ workflows:
             dart pub global activate junitreport
             mkdir -p test-results
             flutter test --machine | dart pub global run junitreport:tojunit --output test-results/flutter.xml
-    - script@1:
+    - script@1.2.1:
         title: Attach golden diff image (if any test failed)
         is_always_run: true
         inputs:
@@ -65,7 +65,7 @@ workflows:
         - test_name: Flutter tests
         - base_path: $BITRISE_SOURCE_DIR/apps/flutter/test-results
         - search_pattern: "*/flutter.xml"
-    - save-dart-cache@1: {}
+    - save-dart-cache@1.1.1: {}
     - deploy-to-bitrise-io@2.26.2:
         is_always_run: true
 
@@ -73,7 +73,7 @@ workflows:
     summary: Manual helper. Records golden images on Linux so you can download and commit them.
     before_run: [_flutter_setup]
     steps:
-    - script@1:
+    - script@1.2.1:
         title: Record goldens
         inputs:
         - working_dir: $BITRISE_SOURCE_DIR/apps/flutter
@@ -93,18 +93,18 @@ workflows:
         machine_type_id: g2.linux.large
     before_run: [_flutter_setup]
     steps:
-    - avd-manager@1:
+    - avd-manager@2.2.0:
         inputs:
         - profile: pixel_6
         - api_level: "34"
         - tag: google_apis
         - abi: x86_64
-    - wait-for-android-emulator@1: {}
-    - script@1:
+    - wait-for-android-emulator@1.0.10: {}
+    - script@1.2.1:
         title: Start screen recording
         inputs:
         - content: $BITRISE_SOURCE_DIR/scripts/recording/start-android.sh /sdcard/bitrise-recordings integration-test
-    - script@1:
+    - script@1.2.1:
         title: Run integration_test
         inputs:
         - working_dir: $BITRISE_SOURCE_DIR/apps/flutter
@@ -117,7 +117,7 @@ workflows:
             mkdir -p test-results
             flutter test integration_test -d "$BITRISE_EMULATOR_SERIAL" --machine \
               | dart pub global run junitreport:tojunit --output test-results/integration.xml
-    - script@1:
+    - script@1.2.1:
         title: Stop screen recording
         is_always_run: true
         inputs:
@@ -126,7 +126,7 @@ workflows:
               $BITRISE_SOURCE_DIR/recordings/integration-test-final.png)"
             [ -n "$SCREENSHOT" ] && echo "Took a final-state screenshot: $SCREENSHOT"
             $BITRISE_SOURCE_DIR/scripts/recording/stop-android.sh /sdcard/bitrise-recordings $BITRISE_SOURCE_DIR/recordings
-    - script@1:
+    - script@1.2.1:
         title: Attach the recording and screenshot
         is_always_run: true
         inputs:
@@ -158,7 +158,7 @@ workflows:
         - test_name: Flutter integration tests
         - base_path: $BITRISE_SOURCE_DIR/apps/flutter/test-results
         - search_pattern: "*/integration.xml"
-    - save-dart-cache@1: {}
+    - save-dart-cache@1.1.1: {}
     - deploy-to-bitrise-io@2.26.2:
         is_always_run: true
 
@@ -170,13 +170,13 @@ workflows:
         machine_type_id: g2.linux.large
     before_run: [_flutter_setup]
     steps:
-    - avd-manager@1:
+    - avd-manager@2.2.0:
         inputs:
         - profile: pixel_6
         - api_level: "34"
         - tag: google_apis
         - abi: x86_64
-    - script@1:
+    - script@1.2.1:
         title: Prepare Android project for Patrol
         inputs:
         - working_dir: $BITRISE_SOURCE_DIR/apps/flutter
@@ -188,12 +188,12 @@ workflows:
             flutter pub get
             dart pub global activate patrol_cli 4.8.0
             envman add --key PATH --value "$PATH:$HOME/.pub-cache/bin"   # keep the CLI on PATH for later steps
-    - wait-for-android-emulator@1: {}
-    - script@1:
+    - wait-for-android-emulator@1.0.10: {}
+    - script@1.2.1:
         title: Start screen recording
         inputs:
         - content: $BITRISE_SOURCE_DIR/scripts/recording/start-android.sh /sdcard/bitrise-recordings patrol
-    - script@1:
+    - script@1.2.1:
         title: Run Patrol tests
         inputs:
         - working_dir: $BITRISE_SOURCE_DIR/apps/flutter
@@ -201,12 +201,12 @@ workflows:
             set -eo pipefail
             export PATH="$PATH:$HOME/.pub-cache/bin"
             patrol test --device "$BITRISE_EMULATOR_SERIAL" --verbose
-    - script@1:
+    - script@1.2.1:
         title: Stop screen recording
         is_always_run: true
         inputs:
         - content: $BITRISE_SOURCE_DIR/scripts/recording/stop-android.sh /sdcard/bitrise-recordings $BITRISE_SOURCE_DIR/recordings
-    - script@1:
+    - script@1.2.1:
         title: Collect Patrol JUnit XML and reports
         is_always_run: true
         inputs:
@@ -252,6 +252,6 @@ workflows:
         - test_name: Patrol (Android)
         - base_path: $BITRISE_SOURCE_DIR/apps/flutter/test-results
         - search_pattern: "*/patrol.xml"
-    - save-dart-cache@1: {}
+    - save-dart-cache@1.1.1: {}
     - deploy-to-bitrise-io@2.26.2:
         is_always_run: true

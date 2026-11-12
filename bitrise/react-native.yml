@@ -21,13 +21,13 @@ workflows:
   rn_jest_tests:
     summary: Jest unit, component and snapshot tests (Linux, no simulator).
     steps:
-    - git-clone@8: {}
-    - restore-npm-cache@2: {}
-    - npm@1:
+    - git-clone@8.5.2: {}
+    - restore-npm-cache@3.0.2: {}
+    - npm@3.1.0:
         inputs:
         - workdir: $BITRISE_SOURCE_DIR/apps/react-native
         - command: ci
-    - script@1:
+    - script@1.2.1:
         title: Run Jest
         inputs:
         - working_dir: $BITRISE_SOURCE_DIR/apps/react-native
@@ -41,7 +41,7 @@ workflows:
         - test_name: Jest (React Native)
         - base_path: $BITRISE_SOURCE_DIR/apps/react-native/test-results
         - search_pattern: "*/jest-junit.xml"
-    - save-npm-cache@1: {}
+    - save-npm-cache@1.2.1: {}
     - deploy-to-bitrise-io@2.26.2:
         is_always_run: true
 
@@ -52,16 +52,16 @@ workflows:
         stack: osx-xcode-16.4.x
         machine_type_id: g2.mac.medium
     steps:
-    - git-clone@8: {}
-    - restore-npm-cache@2: {}
-    - npm@1:
+    - git-clone@8.5.2: {}
+    - restore-npm-cache@3.0.2: {}
+    - npm@3.1.0:
         inputs:
         - workdir: $BITRISE_SOURCE_DIR/apps/react-native
         - command: ci
-    - cocoapods-install@2:
+    - cocoapods-install@3.1.1:
         inputs:
         - source_root_path: $BITRISE_SOURCE_DIR/apps/react-native/ios
-    - script@1:
+    - script@1.2.1:
         title: Build and run Detox
         inputs:
         - working_dir: $BITRISE_SOURCE_DIR/apps/react-native
@@ -86,7 +86,7 @@ workflows:
         - test_name: Detox E2E (iOS)
         - base_path: $BITRISE_SOURCE_DIR/apps/react-native/test-results
         - search_pattern: "*/detox-junit.xml"
-    - script@1:
+    - script@1.2.1:
         title: Keep Detox artifacts as a browsable zip too
         is_always_run: true
         inputs:
@@ -95,7 +95,7 @@ workflows:
         # attachments themselves come from custom-test-results-export above,
         # matching bitrisePathBuilder.js's naming convention under test-results/.
         - content: zip -qr "$BITRISE_DEPLOY_DIR/detox-artifacts.zip" apps/react-native/test-results 2>/dev/null || true
-    - save-npm-cache@1: {}
+    - save-npm-cache@1.2.1: {}
     - deploy-to-bitrise-io@2.26.2:
         is_always_run: true
 
@@ -111,19 +111,19 @@ workflows:
         stack: ubuntu-noble-24.04-bitrise-2025-android
         machine_type_id: g2.linux.large
     steps:
-    - git-clone@8: {}
-    - restore-npm-cache@2: {}
-    - npm@1:
+    - git-clone@8.5.2: {}
+    - restore-npm-cache@3.0.2: {}
+    - npm@3.1.0:
         inputs:
         - workdir: $BITRISE_SOURCE_DIR/apps/react-native
         - command: ci
-    - avd-manager@1:
+    - avd-manager@2.2.0:
         inputs:
         - profile: pixel_6
         - api_level: "34"
         - tag: google_apis
         - abi: x86_64
-    - script@1:
+    - script@1.2.1:
         # Release, not debug: debug builds need the Metro bundler running to
         # render anything (classic RN gotcha -- confirmed live: a debug APK
         # here showed neither "Count: 0" nor increment_button at all).
@@ -133,15 +133,15 @@ workflows:
         inputs:
         - working_dir: $BITRISE_SOURCE_DIR/apps/react-native/android
         - content: ./gradlew :app:assembleRelease
-    - wait-for-android-emulator@1: {}
-    - maestro-test@1:
+    - wait-for-android-emulator@1.0.10: {}
+    - maestro-test@1.2.0:
         inputs:
         - app_path: $BITRISE_SOURCE_DIR/apps/react-native/android/app/build/outputs/apk/release/app-release.apk
         - flow_path: $BITRISE_SOURCE_DIR/apps/react-native/maestro
         - test_name: Maestro E2E (React Native / Android)
         - maestro_version: 2.11.0
         - num_flaky_test_attempts: 1
-    - save-npm-cache@1: {}
+    - save-npm-cache@1.2.1: {}
     - deploy-to-bitrise-io@2.26.2:
         is_always_run: true
 
@@ -156,13 +156,13 @@ workflows:
         stack: osx-xcode-16.4.x
         machine_type_id: g2.mac.medium
     steps:
-    - git-clone@8: {}
-    - restore-npm-cache@2: {}
-    - npm@1:
+    - git-clone@8.5.2: {}
+    - restore-npm-cache@3.0.2: {}
+    - npm@3.1.0:
         inputs:
         - workdir: $BITRISE_SOURCE_DIR/apps/react-native
         - command: ci
-    - cocoapods-install@2:
+    - cocoapods-install@3.1.1:
         inputs:
         - source_root_path: $BITRISE_SOURCE_DIR/apps/react-native/ios
     - xcode-build-for-simulator@3.0.3:
@@ -174,7 +174,7 @@ workflows:
         - scheme: CounterRN
         - configuration: Release
         - destination: platform=iOS Simulator,name=iPhone 16,OS=latest
-    - script@1:
+    - script@1.2.1:
         title: Ad-hoc codesign the built app
         inputs:
         # xcode-build-for-simulator disables signing (CODE_SIGNING_ALLOWED=NO).
@@ -184,13 +184,13 @@ workflows:
         # an unsigned app -- "SBMainWorkspace" (confirmed live, same root
         # cause as ios-maestro-e2e). Ad-hoc signing fixes it.
         - content: codesign --force --deep --sign - "$BITRISE_APP_DIR_PATH"
-    - script@1:
+    - script@1.2.1:
         title: Boot simulator for Maestro
         inputs:
         - content: |
             xcrun simctl boot "iPhone 16" 2>/dev/null || true
             xcrun simctl bootstatus "iPhone 16" -b
-    - maestro-test@1:
+    - maestro-test@1.2.0:
         inputs:
         - app_path: $BITRISE_APP_DIR_PATH
         - flow_path: $BITRISE_SOURCE_DIR/apps/react-native/maestro
@@ -198,6 +198,6 @@ workflows:
         - maestro_version: 2.11.0
         - num_flaky_test_attempts: 1
         - additional_args: --app-id org.reactjs.native.example.CounterRN
-    - save-npm-cache@1: {}
+    - save-npm-cache@1.2.1: {}
     - deploy-to-bitrise-io@2.26.2:
         is_always_run: true

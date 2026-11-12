@@ -21,30 +21,30 @@ workflows:
   android_unit_tests:
     summary: JVM unit tests with JUnit (testDebugUnitTest).
     steps:
-    - git-clone@8: {}
-    - restore-gradle-cache@2: {}
-    - android-unit-test@1:                # exports to the Tests tab automatically
+    - git-clone@8.5.2: {}
+    - restore-gradle-cache@3.1.2: {}
+    - android-unit-test@1.3.0:                # exports to the Tests tab automatically
         inputs:
         - project_location: $BITRISE_SOURCE_DIR/apps/android
         - module: app
         - variant: debug
-    - save-gradle-cache@1: {}
+    - save-gradle-cache@1.6.2: {}
     - deploy-to-bitrise-io@2.26.2:
         is_always_run: true
 
   android_snapshot_tests:
     summary: Paparazzi screenshot tests, compared with the committed snapshots.
     steps:
-    - git-clone@8: {}
-    - restore-gradle-cache@2: {}
-    - script@1:
+    - git-clone@8.5.2: {}
+    - restore-gradle-cache@3.1.2: {}
+    - script@1.2.1:
         title: Verify Paparazzi snapshots
         inputs:
         - working_dir: $BITRISE_SOURCE_DIR/apps/android
         - content: |
             set -eo pipefail
             ./gradlew :app:verifyPaparazziDebug
-    - script@1:
+    - script@1.2.1:
         title: Merge JUnit XML and keep diff images
         is_always_run: true
         inputs:
@@ -68,15 +68,15 @@ workflows:
         - test_name: Paparazzi snapshots
         - base_path: $BITRISE_SOURCE_DIR/apps/android/test-results
         - search_pattern: "*/paparazzi.xml"
-    - save-gradle-cache@1: {}
+    - save-gradle-cache@1.6.2: {}
     - deploy-to-bitrise-io@2.26.2:
         is_always_run: true
 
   android_record_snapshots:
     summary: Manual helper. Records Paparazzi snapshots on CI so you can download and commit them.
     steps:
-    - git-clone@8: {}
-    - script@1:
+    - git-clone@8.5.2: {}
+    - script@1.2.1:
         title: Record Paparazzi snapshots
         inputs:
         - working_dir: $BITRISE_SOURCE_DIR/apps/android
@@ -100,27 +100,27 @@ workflows:
         stack: ubuntu-noble-24.04-bitrise-2025-android
         machine_type_id: g2.linux.large   # the emulator needs more RAM
     steps:
-    - git-clone@8: {}
-    - restore-gradle-cache@2: {}
-    - avd-manager@1:                      # boots in the background while we build
+    - git-clone@8.5.2: {}
+    - restore-gradle-cache@3.1.2: {}
+    - avd-manager@2.2.0:                      # boots in the background while we build
         inputs:
         - profile: pixel_6
         - api_level: "34"
         - tag: google_apis
         - abi: x86_64
-    - wait-for-android-emulator@1: {}
-    - script@1:
+    - wait-for-android-emulator@1.0.10: {}
+    - script@1.2.1:
         title: Start screen recording
         inputs:
         - content: $BITRISE_SOURCE_DIR/scripts/recording/start-android.sh /sdcard/bitrise-recordings ui-tests
-    - script@1:
+    - script@1.2.1:
         title: Run instrumented UI tests
         inputs:
         - working_dir: $BITRISE_SOURCE_DIR/apps/android
         - content: |
             set -eo pipefail
             ./gradlew :app:connectedDebugAndroidTest
-    - script@1:
+    - script@1.2.1:
         title: Stop screen recording
         is_always_run: true
         inputs:
@@ -129,7 +129,7 @@ workflows:
               $BITRISE_SOURCE_DIR/recordings/ui-tests-final.png)"
             [ -n "$SCREENSHOT" ] && echo "Took a final-state screenshot: $SCREENSHOT"
             $BITRISE_SOURCE_DIR/scripts/recording/stop-android.sh /sdcard/bitrise-recordings $BITRISE_SOURCE_DIR/recordings
-    - script@1:
+    - script@1.2.1:
         title: Merge JUnit XML and attach the recording
         is_always_run: true
         inputs:
@@ -165,7 +165,7 @@ workflows:
         - test_name: Compose UI tests (Android)
         - base_path: $BITRISE_SOURCE_DIR/apps/android/test-results
         - search_pattern: "*/instrumented.xml"
-    - save-gradle-cache@1: {}
+    - save-gradle-cache@1.6.2: {}
     - deploy-to-bitrise-io@2.26.2:
         is_always_run: true
 
@@ -187,8 +187,8 @@ workflows:
         stack: ubuntu-noble-24.04-bitrise-2025-android
         machine_type_id: g2.linux.medium
     steps:
-    - git-clone@8: {}
-    - restore-gradle-cache@2: {}
+    - git-clone@8.5.2: {}
+    - restore-gradle-cache@3.1.2: {}
     - android-build-for-ui-testing@1.0.0:
         inputs:
         - project_location: $BITRISE_SOURCE_DIR/apps/android
@@ -203,6 +203,6 @@ workflows:
         # setting VDT_DEVICE_LIST at the app/workflow level in the Bitrise UI.
         - test_devices: $VDT_DEVICE_LIST
         - download_test_results: "true"
-    - save-gradle-cache@1: {}
+    - save-gradle-cache@1.6.2: {}
     - deploy-to-bitrise-io@2.26.2:
         is_always_run: true
