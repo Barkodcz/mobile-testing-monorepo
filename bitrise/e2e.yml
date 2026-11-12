@@ -245,7 +245,7 @@ workflows:
         - app_path: $MAESTRO_SHARD_APK_PATH
         - flow_path: /tmp/maestro-shard-1
         - test_name: Maestro shard 1 (Android)
-        - maestro_version: 2.11.0
+        - maestro_version: 2.12.1
         - num_flaky_test_attempts: 1
     - deploy-to-bitrise-io@2.26.2:
         is_always_run: true
@@ -290,7 +290,7 @@ workflows:
         - app_path: $MAESTRO_SHARD_APK_PATH
         - flow_path: /tmp/maestro-shard-2
         - test_name: Maestro shard 2 (Android)
-        - maestro_version: 2.11.0
+        - maestro_version: 2.12.1
         - num_flaky_test_attempts: 1
     - deploy-to-bitrise-io@2.26.2:
         is_always_run: true
@@ -339,7 +339,7 @@ workflows:
         - app_path: $MAESTRO_SHARD_APK_PATH
         - flow_path: /tmp/maestro-shard-3
         - test_name: Maestro shard 3 (Android)
-        - maestro_version: 2.11.0
+        - maestro_version: 2.12.1
         - num_flaky_test_attempts: 1
     - deploy-to-bitrise-io@2.26.2:
         is_always_run: true

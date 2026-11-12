@@ -158,7 +158,7 @@ workflows:
         - app_path: $BITRISE_APP_DIR_PATH
         - flow_path: $BITRISE_SOURCE_DIR/apps/ios/maestro
         - test_name: Maestro E2E (iOS)
-        - maestro_version: 2.11.0
+        - maestro_version: 2.12.1
         - num_flaky_test_attempts: 1
     - deploy-to-bitrise-io@2.26.2:
         is_always_run: true
