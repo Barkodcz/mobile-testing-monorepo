@@ -68,7 +68,9 @@ workflows:
             set -eo pipefail
             command -v applesimutils >/dev/null 2>&1 || { brew tap wix/brew && brew install wix/brew/applesimutils; }
             npx detox build --configuration ios.sim.release
-            npx detox test --configuration ios.sim.release --cleanup --record-logs failing --take-screenshots failing
+            # --take-screenshots all: the explicit device.takeScreenshot() calls in the
+            # tests are no-ops on disk under "failing" mode unless the test actually fails.
+            npx detox test --configuration ios.sim.release --cleanup --record-logs failing --take-screenshots all
     - custom-test-results-export@1:
         is_always_run: true
         inputs:
