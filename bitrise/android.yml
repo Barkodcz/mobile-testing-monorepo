@@ -81,7 +81,13 @@ workflows:
         is_always_run: true
 
   android_ui_tests:
-    summary: Compose UI tests (instrumented) on an Android emulator.
+    summary: >
+      Compose UI tests (instrumented) on an Android emulator, with the whole
+      run's screen recording attached to a synthetic test case in the Tests
+      tab. Switched from the native android-instrumented-test Step to a
+      Gradle script + the generic export route, so the recording can be
+      wrapped around the run and attached by filename convention (see
+      docs/test-recording-plan.md).
     meta:
       bitrise.io:
         stack: ubuntu-noble-24.04-bitrise-2025-android
@@ -95,16 +101,51 @@ workflows:
         - api_level: "34"
         - tag: google_apis
         - abi: x86_64
-    - android-build-for-ui-testing@0:     # sets BITRISE_APK_PATH and BITRISE_TEST_APK_PATH
-        inputs:
-        - project_location: $BITRISE_SOURCE_DIR/apps/android
-        - module: app
-        - variant: debug
     - wait-for-android-emulator@1: {}
-    - android-instrumented-test@0:        # exports to the Tests tab automatically
+    - script@1:
+        title: Start screen recording
         inputs:
-        - main_apk_path: $BITRISE_APK_PATH
-        - test_apk_path: $BITRISE_TEST_APK_PATH
+        - content: $BITRISE_SOURCE_DIR/scripts/recording/start-android.sh /sdcard/bitrise-recordings ui-tests
+    - script@1:
+        title: Run instrumented UI tests
+        inputs:
+        - working_dir: $BITRISE_SOURCE_DIR/apps/android
+        - content: |
+            set -eo pipefail
+            ./gradlew :app:connectedDebugAndroidTest
+    - script@1:
+        title: Stop screen recording
+        is_always_run: true
+        inputs:
+        - content: $BITRISE_SOURCE_DIR/scripts/recording/stop-android.sh /sdcard/bitrise-recordings $BITRISE_SOURCE_DIR/recordings
+    - script@1:
+        title: Merge JUnit XML and attach the recording
+        is_always_run: true
+        inputs:
+        - working_dir: $BITRISE_SOURCE_DIR/apps/android
+        - content: |
+            set -eo pipefail
+            mkdir -p test-results
+            npx --yes junit-report-merger test-results/instrumented.xml \
+              "app/build/outputs/androidTest-results/connected/**/TEST-*.xml"
+            RECORDING="$("$BITRISE_SOURCE_DIR/scripts/recording/concat-chunks.sh" \
+              "$BITRISE_SOURCE_DIR/recordings/bitrise-recordings/ui-tests_chunk*.mp4" \
+              "$BITRISE_SOURCE_DIR/recordings/ui-tests_combined.mp4")"
+            if [ -n "$RECORDING" ]; then
+              python3 "$BITRISE_SOURCE_DIR/scripts/reporting/attach_media_to_junit.py" add-recording-testcase \
+                --junit-xml test-results/instrumented.xml \
+                --classname io.bitrise.sample.counter.CounterScreenUiTest \
+                --media "$RECORDING" \
+                --dest-dir test-results
+            else
+              echo "No recording found, exporting test results without a video attachment."
+            fi
+    - custom-test-results-export@2.0.0:
+        is_always_run: true
+        inputs:
+        - test_name: Compose UI tests (Android)
+        - base_path: $BITRISE_SOURCE_DIR/apps/android/test-results
+        - search_pattern: "*/instrumented.xml"
     - save-gradle-cache@1: {}
     - deploy-to-bitrise-io@2.26.2:
         is_always_run: true
