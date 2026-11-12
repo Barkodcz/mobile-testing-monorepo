@@ -1,0 +1,17 @@
+# Port of e2e/maestro/counter_basic.yaml (Android) to the iOS app.
+# Same bundle ID family and the same element IDs on every platform, so the
+# flow body is almost identical -- only appId differs.
+appId: io.bitrise.sample.counter
+name: Counter starts at zero and increments
+---
+- startRecording: recording
+- launchApp:
+    clearState: true
+- assertVisible: "Count: 0"
+- tapOn:
+    id: "increment_button"
+- tapOn:
+    id: "increment_button"
+- assertVisible: "Count: 2"
+- takeScreenshot: after_increment
+- stopRecording

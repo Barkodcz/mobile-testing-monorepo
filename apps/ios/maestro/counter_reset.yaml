@@ -1,0 +1,13 @@
+# Port of e2e/maestro/counter_reset.yaml (Android) to the iOS app.
+appId: io.bitrise.sample.counter
+name: Reset brings the counter back to zero
+---
+- startRecording: recording
+- launchApp:
+    clearState: true
+- tapOn: "Increment"
+- assertVisible: "Count: 1"
+- tapOn: "Reset"
+- assertVisible: "Count: 0"
+- takeScreenshot: after_reset
+- stopRecording

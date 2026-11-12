@@ -101,6 +101,34 @@ workflows:
     - deploy-to-bitrise-io@2.26.2:
         is_always_run: true
 
+  ios-maestro-e2e:
+    summary: >
+      Maestro E2E flows against the native iOS app on a simulator -- ports of
+      the existing Android Maestro flows (e2e/maestro/), same journeys, new
+      folder apps/ios/maestro/. Manual-trigger only (not added to the `ios`
+      pipeline) to avoid adding simulator minutes to every push; start it
+      from the Bitrise UI. See docs/new-test-scenarios-plan.md.
+    meta:
+      bitrise.io:
+        stack: osx-xcode-16.4.x
+        machine_type_id: g2.mac.medium
+    before_run: [_ios_setup]
+    steps:
+    - xcode-build-for-simulator@3.0.3:
+        inputs:
+        - project_path: apps/ios/CounterApp.xcodeproj
+        - scheme: CounterApp
+        - destination: platform=iOS Simulator,name=iPhone 16,OS=latest
+    - maestro-test@1:
+        inputs:
+        - app_path: $BITRISE_APP_DIR_PATH
+        - flow_path: $BITRISE_SOURCE_DIR/apps/ios/maestro
+        - test_name: Maestro E2E (iOS)
+        - maestro_version: 2.11.0
+        - num_flaky_test_attempts: 1
+    - deploy-to-bitrise-io@2.26.2:
+        is_always_run: true
+
   ios_ui_tests_manual:
     summary: >
       Same XCUITest suite as ios_ui_tests, but ("Approach B") driven by a
