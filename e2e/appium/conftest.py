@@ -5,6 +5,8 @@ import pytest
 from appium import webdriver
 from appium.options.android import UiAutomator2Options
 
+SCREENSHOTS_DIR = os.path.join(os.path.dirname(__file__), "test-results", "screenshots")
+
 
 @pytest.fixture
 def driver(request):
@@ -32,6 +34,12 @@ def driver(request):
     drv.execute_script(
         'browserstack_executor: {"action": "setSessionStatus", "arguments": {"status": "%s"}}' % status
     )
+
+    # Local screenshot for every test, pass or fail (BrowserStack also records
+    # a full session video per run, viewable in its dashboard regardless).
+    os.makedirs(SCREENSHOTS_DIR, exist_ok=True)
+    drv.get_screenshot_as_file(os.path.join(SCREENSHOTS_DIR, f"{request.node.name}-{status}.png"))
+
     drv.quit()
 
 

@@ -86,5 +86,10 @@ workflows:
         - test_name: Appium on BrowserStack
         - base_path: $BITRISE_SOURCE_DIR/e2e/appium/test-results
         - search_pattern: "*/appium.xml"
+    - script@1:
+        title: Keep Appium screenshots
+        is_always_run: true
+        inputs:
+        - content: cp -r e2e/appium/test-results/screenshots "$BITRISE_DEPLOY_DIR/appium-screenshots" 2>/dev/null || true
     - save-gradle-cache@1: {}
     - deploy-to-bitrise-io@2: {}

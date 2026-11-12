@@ -11,3 +11,4 @@ name: Counter starts at zero and increments
 - tapOn:
     id: "increment_button"
 - assertVisible: "Count: 2"
+- takeScreenshot: after_increment
