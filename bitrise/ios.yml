@@ -116,8 +116,11 @@ workflows:
     steps:
     - xcode-build-for-simulator@3.0.3:
         inputs:
+        # No bare "CounterApp" scheme exists -- project.yml only defines
+        # CounterApp-Unit/CounterApp-UI. Either works for a build-only step
+        # since we're not invoking the test action here.
         - project_path: apps/ios/CounterApp.xcodeproj
-        - scheme: CounterApp
+        - scheme: CounterApp-UI
         - destination: platform=iOS Simulator,name=iPhone 16,OS=latest
     - maestro-test@1:
         inputs:
