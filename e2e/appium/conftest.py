@@ -100,7 +100,14 @@ def ios_driver(request):
     options = XCUITestOptions()
     options.app = os.environ["APPIUM_IOS_APP_PATH"]
     options.automation_name = "XCUITest"
-    options.platform_version = os.environ.get("APPIUM_IOS_OS_VERSION", "18.0")
+    ios_udid = os.environ.get("APPIUM_IOS_UDID")
+    if ios_udid:
+        # Attach to the exact simulator instance CI already booted and
+        # installed the build into, instead of guessing a platform_version
+        # (which drifts across stack updates -- see ios-appium-local).
+        options.udid = ios_udid
+    else:
+        options.platform_version = os.environ.get("APPIUM_IOS_OS_VERSION", "18.0")
     options.device_name = os.environ.get("APPIUM_IOS_DEVICE", "iPhone 16")
     drv = webdriver.Remote(
         os.environ.get("APPIUM_SERVER_URL", "http://localhost:4723"), options=options

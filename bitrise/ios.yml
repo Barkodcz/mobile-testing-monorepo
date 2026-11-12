@@ -19,6 +19,20 @@ pipelines:
         changed_files:
           regex: '^(apps/ios/.*|bitrise/ios\.yml)$'
 
+  # Scenario 3a: build the CounterApp-UI test bundle once, shard it, run the
+  # shards in parallel, each reporting its own Tests tab entry. Start this
+  # PIPELINE from the Bitrise UI (not any one of its workflows directly).
+  # See docs/new-test-scenarios-plan.md.
+  ios_xcuitest_sharded:
+    workflows:
+      ios-xcuitest-shard-build: {}
+      ios-xcuitest-shard-calc:
+        depends_on: [ios-xcuitest-shard-build]
+      ios-xcuitest-shard-1:
+        depends_on: [ios-xcuitest-shard-calc]
+      ios-xcuitest-shard-2:
+        depends_on: [ios-xcuitest-shard-calc]
+
 workflows:
   _ios_setup:
     summary: Clone the repo and generate the Xcode project with XcodeGen.
@@ -125,7 +139,14 @@ workflows:
     - script@1:
         title: Boot simulator for Maestro
         inputs:
-        - content: xcrun simctl boot "iPhone 16" 2>/dev/null || true
+        # bootstatus -b blocks until SpringBoard is actually ready. Without
+        # it, simctl boot returns immediately and the very next simctl
+        # launch (done internally by maestro-test) gets rejected with
+        # "FBSOpenApplicationServiceErrorDomain... denied by SBMainWorkspace"
+        # -- confirmed live on build #98.
+        - content: |
+            xcrun simctl boot "iPhone 16" 2>/dev/null || true
+            xcrun simctl bootstatus "iPhone 16" -b
     - maestro-test@1:
         inputs:
         - app_path: $BITRISE_APP_DIR_PATH
@@ -212,6 +233,15 @@ workflows:
         - content: |
             set -eo pipefail
             xcrun simctl boot "iPhone 16" 2>/dev/null || true
+            xcrun simctl bootstatus "iPhone 16" -b
+            # Hand Appium the exact UDID of the simulator we just booted,
+            # instead of a hardcoded platform_version -- the build step
+            # below uses OS=latest, which drifts across stack updates and
+            # previously caused "'18.0' does not exist in the list of
+            # simctl SDKs" (confirmed live on build #102).
+            IOS_SIM_UDID="$(xcrun simctl list devices booted -j \
+              | python3 -c "import json,sys; d=json.load(sys.stdin)['devices']; print(next(x['udid'] for v in d.values() for x in v if x['name']=='iPhone 16'))")"
+            envman add --key APPIUM_IOS_UDID --value "$IOS_SIM_UDID"
             npm install -g appium@2.11.0
             appium driver install xcuitest@7.29.0
             nohup appium --base-path /wd/hub --allow-insecure chromedriver_autodownload \
@@ -232,6 +262,8 @@ workflows:
             export APPIUM_SERVER_URL=http://localhost:4723/wd/hub
             export APPIUM_IOS_APP_PATH="$BITRISE_APP_DIR_PATH"
             export APPIUM_IOS_DEVICE="iPhone 16"
+            # APPIUM_IOS_UDID is already in the env, exported by envman in
+            # the previous step.
             python3 -m venv .venv && . .venv/bin/activate
             pip install -q -r requirements.txt
             mkdir -p test-results
@@ -309,5 +341,107 @@ workflows:
         - test_name: XCUITest UI tests (manual xcodebuild)
         - base_path: $BITRISE_SOURCE_DIR/apps/ios/test-results
         - search_pattern: "*/xcuitest.xml"
+    - deploy-to-bitrise-io@2.26.2:
+        is_always_run: true
+
+  ios-xcuitest-shard-build:
+    summary: >
+      Stage 1/3 of the sharded XCUITest pipeline (scenario 3a): builds the
+      CounterApp-UI test bundle once with xcode-build-for-test, shared with
+      the other stages via pipeline intermediate files. Part of the
+      ios_xcuitest_sharded pipeline -- don't start this workflow directly.
+    meta:
+      bitrise.io:
+        stack: osx-xcode-16.4.x
+        machine_type_id: g2.mac.medium
+    before_run: [_ios_setup]
+    steps:
+    - xcode-build-for-test@3.6.0:
+        inputs:
+        - project_path: apps/ios/CounterApp.xcodeproj
+        - scheme: CounterApp-UI
+        - destination: generic/platform=iOS Simulator
+        - automatic_code_signing: "off"
+    - deploy-to-bitrise-io@2.26.2:
+        is_always_run: true
+        inputs:
+        - pipeline_intermediate_files: |-
+            BITRISE_TEST_BUNDLE_PATH
+            BITRISE_XCTESTRUN_FILE_PATH
+
+  ios-xcuitest-shard-calc:
+    summary: >
+      Stage 2/3: calculates N test shards (XCUITEST_SHARD_COUNT env var,
+      default 2 -- this app's CounterApp-UI target only has 2 test methods,
+      see docs/new-test-scenarios-plan.md) from the test bundle built in
+      stage 1.
+    meta:
+      bitrise.io:
+        stack: osx-xcode-16.4.x
+        machine_type_id: g2.mac.medium
+    steps:
+    - pull-intermediate-files@1.3.7:
+        inputs:
+        - artifact_sources: ios-xcuitest-shard-build
+    - xcode-test-shard-calculation@0.2.1:
+        inputs:
+        - product_path: $BITRISE_TEST_BUNDLE_PATH
+        - shard_count: $XCUITEST_SHARD_COUNT
+    - deploy-to-bitrise-io@2.26.2:
+        is_always_run: true
+        inputs:
+        - pipeline_intermediate_files: |-
+            BITRISE_TEST_SHARDS_PATH
+            BITRISE_XCTESTRUN_FILE_PATH
+            BITRISE_TEST_BUNDLE_PATH
+
+  ios-xcuitest-shard-1:
+    summary: >
+      Stage 3/3, shard 1 of XCUITEST_SHARD_COUNT. Reports its own Tests tab
+      entry, separate from shard 2's.
+    meta:
+      bitrise.io:
+        stack: osx-xcode-16.4.x
+        machine_type_id: g2.mac.medium
+    steps:
+    - pull-intermediate-files@1.3.7:
+        inputs:
+        - artifact_sources: ios-xcuitest-shard-calc
+    - script@1:
+        title: Boot simulator
+        inputs:
+        - content: xcrun simctl boot "iPhone 16" 2>/dev/null || true
+    - xcode-test-without-building@1.0.1:
+        inputs:
+        - xctestrun: $BITRISE_XCTESTRUN_FILE_PATH
+        - destination: platform=iOS Simulator,name=iPhone 16,OS=latest
+        # xcode-test-shard-calculation writes one file per shard under
+        # $BITRISE_TEST_SHARDS_PATH; exact naming confirmed via a live run
+        # (see docs/new-test-scenarios-plan.md for the final value).
+        - only_testing: $BITRISE_TEST_SHARDS_PATH/shard_1.txt
+    - deploy-to-bitrise-io@2.26.2:
+        is_always_run: true
+
+  ios-xcuitest-shard-2:
+    summary: >
+      Stage 3/3, shard 2 of XCUITEST_SHARD_COUNT. Reports its own Tests tab
+      entry, separate from shard 1's.
+    meta:
+      bitrise.io:
+        stack: osx-xcode-16.4.x
+        machine_type_id: g2.mac.medium
+    steps:
+    - pull-intermediate-files@1.3.7:
+        inputs:
+        - artifact_sources: ios-xcuitest-shard-calc
+    - script@1:
+        title: Boot simulator
+        inputs:
+        - content: xcrun simctl boot "iPhone 16" 2>/dev/null || true
+    - xcode-test-without-building@1.0.1:
+        inputs:
+        - xctestrun: $BITRISE_XCTESTRUN_FILE_PATH
+        - destination: platform=iOS Simulator,name=iPhone 16,OS=latest
+        - only_testing: $BITRISE_TEST_SHARDS_PATH/shard_2.txt
     - deploy-to-bitrise-io@2.26.2:
         is_always_run: true
