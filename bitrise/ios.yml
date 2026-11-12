@@ -6,6 +6,9 @@ pipelines:
     workflows:
       ios_unit_tests: {}
       ios_ui_tests: {}
+      # ios_ui_tests_manual is deliberately NOT included here: it's a
+      # manual-trigger-only demonstration of the alternative (full-control)
+      # approach to recording XCUITest runs, see docs/test-recording-plan.md.
     triggers:
       push:
       - branch: main
@@ -55,17 +58,107 @@ workflows:
         is_always_run: true
 
   ios_ui_tests:
-    summary: XCUITest UI tests on an iOS simulator.
+    summary: >
+      XCUITest UI tests on an iOS simulator ("Approach A": keep the native
+      Xcode Test Step, pre-boot the simulator ourselves so simctl can record
+      it). Screenshots XCTest itself captures on failure still auto-attach
+      via xcresult, same as before -- but the externally recorded video
+      can only be deployed as a plain build artifact, NOT attached to a
+      Tests tab test case, since xcresult's attachment matching only covers
+      attachments the test process captured through XCTest's own API, not
+      files recorded from outside it. See ios_ui_tests_manual for the
+      approach that gets a true Tests-tab video attachment. More in
+      docs/test-recording-plan.md.
     meta:
       bitrise.io:
         stack: osx-xcode-16.4.x
         machine_type_id: g2.mac.medium
     before_run: [_ios_setup]
     steps:
+    - script@1:
+        title: Boot simulator and start recording
+        inputs:
+        - content: |
+            xcrun simctl boot "iPhone 16" 2>/dev/null || true
+            $BITRISE_SOURCE_DIR/scripts/recording/start-ios-sim.sh booted \
+              $BITRISE_SOURCE_DIR/recordings/ios-ui-tests.mov
     - xcode-test@6:
         inputs:
         - project_path: apps/ios/CounterApp.xcodeproj
         - scheme: CounterApp-UI
         - destination: platform=iOS Simulator,name=iPhone 16,OS=latest
+    - script@1:
+        title: Stop recording and keep it as a build artifact
+        is_always_run: true
+        inputs:
+        - content: |
+            $BITRISE_SOURCE_DIR/scripts/recording/stop-ios-sim.sh \
+              $BITRISE_SOURCE_DIR/recordings/ios-ui-tests.mov \
+              $BITRISE_SOURCE_DIR/recordings/ios-ui-tests.mp4
+            [ -s "$BITRISE_SOURCE_DIR/recordings/ios-ui-tests.mp4" ] \
+              && cp "$BITRISE_SOURCE_DIR/recordings/ios-ui-tests.mp4" "$BITRISE_DEPLOY_DIR/ios-ui-tests-recording.mp4" \
+              || echo "No recording to keep."
+    - deploy-to-bitrise-io@2.26.2:
+        is_always_run: true
+
+  ios_ui_tests_manual:
+    summary: >
+      Same XCUITest suite as ios_ui_tests, but ("Approach B") driven by a
+      manual `xcodebuild test` instead of the native Xcode Test Step, so we
+      have full control of the simulator lifecycle and get a real JUnit XML
+      (via xcpretty) to attach the recording to -- a true Tests-tab video
+      attachment, at the cost of losing the native Step's xcresult
+      auto-attachment and convenience. Manual-trigger only: this exists to
+      demonstrate the alternative, not to double-run UI tests on every push.
+    meta:
+      bitrise.io:
+        stack: osx-xcode-16.4.x
+        machine_type_id: g2.mac.medium
+    before_run: [_ios_setup]
+    steps:
+    - script@1:
+        title: Boot simulator and start recording
+        inputs:
+        - content: |
+            xcrun simctl boot "iPhone 16" 2>/dev/null || true
+            gem list -i xcpretty >/dev/null 2>&1 || gem install xcpretty --no-document
+            $BITRISE_SOURCE_DIR/scripts/recording/start-ios-sim.sh booted \
+              $BITRISE_SOURCE_DIR/recordings/ios-ui-tests-manual.mov
+    - script@1:
+        title: Run xcodebuild test
+        inputs:
+        - working_dir: $BITRISE_SOURCE_DIR/apps/ios
+        - content: |
+            set -o pipefail
+            mkdir -p test-results
+            xcodebuild test \
+              -project CounterApp.xcodeproj \
+              -scheme CounterApp-UI \
+              -destination "platform=iOS Simulator,name=iPhone 16,OS=latest" \
+              | xcpretty --report junit --output test-results/xcuitest.xml
+    - script@1:
+        title: Stop recording and attach it to the Tests tab
+        is_always_run: true
+        inputs:
+        - working_dir: $BITRISE_SOURCE_DIR/apps/ios
+        - content: |
+            $BITRISE_SOURCE_DIR/scripts/recording/stop-ios-sim.sh \
+              $BITRISE_SOURCE_DIR/recordings/ios-ui-tests-manual.mov \
+              $BITRISE_SOURCE_DIR/recordings/ios-ui-tests-manual.mp4
+            if [ -s "$BITRISE_SOURCE_DIR/recordings/ios-ui-tests-manual.mp4" ]; then
+              python3 "$BITRISE_SOURCE_DIR/scripts/reporting/attach_media_to_junit.py" add-recording-testcase \
+                --junit-xml test-results/xcuitest.xml \
+                --classname CounterAppUITests.CounterUITests \
+                --media "$BITRISE_SOURCE_DIR/recordings/ios-ui-tests-manual.mp4" \
+                --dest-dir test-results
+            else
+              echo "No recording found, exporting test results without a video attachment."
+            fi
+    - custom-test-results-export@2.0.0:
+        is_always_run: true
+        inputs:
+        - test_name: XCUITest UI tests (manual xcodebuild)
+        - base_path: $BITRISE_SOURCE_DIR/apps/ios/test-results
+        - search_pattern: "*/xcuitest.xml"
     - deploy-to-bitrise-io@2.26.2:
         is_always_run: true
