@@ -178,7 +178,7 @@ written, add-on not yet enabled) → 3b (Maestro sharded) → 3a (XCUITest shard
 None of these were anticipated in the discovery phase above; all confirmed via real Bitrise
 builds, not guessed:
 
-1. **UNRESOLVED, genuine CI-environment blocker**: `ios-maestro-e2e`, `ios-maestro-e2e-rn`, and
+1. **RESOLVED** (see below the original write-up): `ios-maestro-e2e`, `ios-maestro-e2e-rn`, and
    `ios-appium-local` all fail installing/launching the built `.app` directly via `simctl`
    (which is what Maestro and Appium's XCUITest driver do), while `xcode-test`/`xcodebuild test`
    (`ios_ui_tests`, `ios_ui_tests_manual`) — which launch through Xcode's own test harness
@@ -211,6 +211,28 @@ builds, not guessed:
    - **Left in place**: the `bootstatus -b` wait (legitimate regardless) and the ad-hoc codesign
      step (harmless, may matter on other stacks) in `ios-maestro-e2e`, `ios-maestro-e2e-rn`, and
      `ios-appium-local`. The `ARCHS`/`EXCLUDED_ARCHS` pin stays in `project.yml` too (harmless).
+   - **Actually resolved, in two parts, after a later Xcode 16.4 → 27.2 stack upgrade exposed
+     the real cause more clearly**:
+     - `xcode-build-for-simulator`'s `xcodebuild archive` was tagging every build for the
+       device platform regardless of flags (`simctl install` refusing it with "has code for
+       platforms: [iOS, arm64]... device can run: iOS-simulator"). Fixed by replacing the Step
+       with a raw `xcodebuild build -sdk iphonesimulator` script in all three workflows
+       (confirmed live, build #156/157).
+     - `ios-maestro-e2e-rn` still failed after that fix, but with a new, unrelated error:
+       `maestro test` doesn't have a `--app-id` flag (`additional_args: --app-id ...` → "Unknown
+       option: '--app-id'", confirmed live, build #158). Fixed by parameterizing `appId` in the
+       flow files as `${MAESTRO_APP_ID}` and passing it via `-e MAESTRO_APP_ID=...` in each
+       workflow's `additional_args` instead.
+     - `ios-appium-local` also still failed after the build fix, with its own unrelated error:
+       Appium's XCUITest driver tries to bring the Simulator.app GUI to the foreground itself by
+       default, and that file doesn't exist at the path it expects on `osx-xcode-27.2.x`
+       ("Got an unexpected error while opening Simulator UI: .../Simulator.app does not exist",
+       confirmed live, build #159). Fixed by setting `appium:isHeadless=true` on the
+       `ios_driver` fixture's `XCUITestOptions` in `conftest.py` — the simulator is already
+       booted headlessly via `simctl` beforehand, same as every other simctl-driven workflow in
+       this repo, so Appium doesn't need to open the GUI itself.
+     - All three re-verified live after these fixes: `ios-maestro-e2e` (build #157),
+       `ios-maestro-e2e-rn` (build #164), `ios-appium-local` (build #165) — all passing.
 3. **`ios-appium-local`'s hardcoded `platform_version` default (`18.0`)** didn't match any
    simulator SDK actually installed on the stack (`18.4`/`18.5`/`18.6`/`16.4`/`17.5` at the time).
    Fixed by capturing the exact UDID of the simulator CI already booted and built into, and
@@ -278,20 +300,19 @@ the Maestro 2.12.1 bump resolved the launch-denial blocker.
 
 | # | Scenario | Status |
 | --- | --- | --- |
-| 1 | Maestro on iOS | Code complete (flows, workflow); **blocked** on the unresolved CI launch-denial issue (#1 above) |
-| 2 | Maestro on React Native (Android + iOS) | Android side **done, verified passing**; iOS side **blocked** on the same unresolved issue |
+| 1 | Maestro on iOS | **Done, verified passing** — simulator launch-denial fixed via ad-hoc codesigning + raw `xcodebuild build` |
+| 2 | Maestro on React Native (Android + iOS) | **Done, both platforms verified passing** — iOS side also needed `appId` parameterized via `${MAESTRO_APP_ID}` + `-e`, since `maestro test` has no `--app-id` flag |
 | 3a | XCUITest sharded pipeline | **Done, verified passing** — build→calc→shard-1/shard-2 all succeeded, each shard its own Tests tab entry |
 | 3b | Maestro sharded pipeline (Android) | **Done, verified passing** — shard 3 correctly skips with 0 flows at the default shard count |
 | 4 | Android instrumentation on VDT | **Done, verified passing** — add-on enabled, run confirmed live |
-| 5 | Appium local (Android + iOS) | Android side **done, verified passing**; iOS side **blocked** on the same unresolved issue |
+| 5 | Appium local (Android + iOS) | **Done, both platforms verified passing** — iOS side also needed `appium:isHeadless=true` to stop Appium trying to open the (nonexistent-on-this-stack) Simulator.app GUI |
 | 6 | Classic XCTest next to Swift Testing | **Done, verified** — both classes show separately in the Tests tab |
 | 7 | fastlane `scan` variant | **Done, verified passing** |
 
-All code for every scenario is written, additive, and committed. 5 of 7 scenarios (plus the
-Android side of 2 and 5) are fully verified passing. The only unresolved item is the
-iOS-simulator-direct-launch issue affecting the iOS side of scenarios 1, 2, and 5 — a CI
-environment issue external to this repo's code, documented in detail above. Scenario 4 just
-needs the VDT add-on enabled.
+All code for every scenario is written, additive, and committed. **All 7 scenarios are fully
+verified passing**, including both platforms of 2 and 5. The iOS-simulator-direct-launch issue
+that previously blocked the iOS side of scenarios 1, 2, and 5 is resolved (see the "Real bugs
+found and fixed" section above). The VDT add-on (scenario 4) is enabled and verified passing.
 
 ## Shard assignment (confirmed live)
 
