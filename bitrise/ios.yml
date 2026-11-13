@@ -128,21 +128,30 @@ workflows:
         machine_type_id: g2.mac.medium
     before_run: [_ios_setup]
     steps:
-    - xcode-build-for-simulator@3.0.3:
+    - script@1.2.1:
+        title: Build for simulator (raw xcodebuild build, not archive)
         inputs:
-        # No bare "CounterApp" scheme exists -- project.yml only defines
-        # CounterApp-Unit/CounterApp-UI. Either works for a build-only step
-        # since we're not invoking the test action here.
-        - project_path: apps/ios/CounterApp.xcodeproj
-        - scheme: CounterApp-UI
-        - destination: platform=iOS Simulator,name=Bitrise iOS default,OS=latest
-        # The Step runs `xcodebuild archive`, which -- unlike `build`/`test`
-        # -- doesn't reliably resolve to the simulator SDK from -destination
-        # alone: it produced a device-platform binary ("has code for
-        # platforms: [iOS, arm64]... device can run: iOS-simulator",
-        # confirmed live) that simctl then refuses to install. Forcing
-        # -sdk iphonesimulator makes the platform unambiguous.
-        - xcodebuild_options: -sdk iphonesimulator
+        # xcode-build-for-simulator hardcodes `xcodebuild archive`, which
+        # -- confirmed live, twice, including with an explicit
+        # `-sdk iphonesimulator` -- still tags the output for the iOS DEVICE
+        # platform ("has code for platforms: [iOS, arm64]... device can run:
+        # iOS-simulator"), making simctl refuse to install it. `archive` is
+        # fundamentally a device-distribution action in Xcode; it doesn't
+        # reliably resolve to the simulator platform regardless of flags.
+        # `xcodebuild build` (what ios_ui_tests/ios_ui_tests_manual already
+        # use successfully via xcode-test/raw xcodebuild test) doesn't have
+        # this problem, so build directly instead of using the Step.
+        - content: |
+            set -eo pipefail
+            xcodebuild build \
+              -project apps/ios/CounterApp.xcodeproj \
+              -scheme CounterApp-UI \
+              -sdk iphonesimulator \
+              -destination "platform=iOS Simulator,name=Bitrise iOS default,OS=latest" \
+              -derivedDataPath "$BITRISE_SOURCE_DIR/ios-sim-build" \
+              CODE_SIGNING_ALLOWED=NO
+            APP_PATH="$(find "$BITRISE_SOURCE_DIR/ios-sim-build/Build/Products" -maxdepth 2 -name 'CounterApp.app' | head -1)"
+            envman add --key BITRISE_APP_DIR_PATH --value "$APP_PATH"
     - script@1.2.1:
         title: Ad-hoc codesign the built app
         inputs:
@@ -261,14 +270,23 @@ workflows:
               > /tmp/appium-server.log 2>&1 &
             echo $! > /tmp/appium-server.pid
             for _ in $(seq 1 30); do curl -sf http://localhost:4723/wd/hub/status && break; sleep 1; done
-    - xcode-build-for-simulator@3.0.3:
+    - script@1.2.1:
+        title: Build for simulator (raw xcodebuild build, not archive)
         inputs:
-        - project_path: apps/ios/CounterApp.xcodeproj
-        - scheme: CounterApp-UI
-        - destination: platform=iOS Simulator,name=Bitrise iOS default,OS=latest
-        # Forces the simulator SDK explicitly -- `xcodebuild archive` doesn't
-        # reliably resolve it from -destination alone, see ios-maestro-e2e.
-        - xcodebuild_options: -sdk iphonesimulator
+        # See ios-maestro-e2e: xcode-build-for-simulator's `xcodebuild
+        # archive` tags the output for the device platform regardless of
+        # flags (confirmed live, twice), so build directly instead.
+        - content: |
+            set -eo pipefail
+            xcodebuild build \
+              -project apps/ios/CounterApp.xcodeproj \
+              -scheme CounterApp-UI \
+              -sdk iphonesimulator \
+              -destination "platform=iOS Simulator,name=Bitrise iOS default,OS=latest" \
+              -derivedDataPath "$BITRISE_SOURCE_DIR/ios-sim-build" \
+              CODE_SIGNING_ALLOWED=NO
+            APP_PATH="$(find "$BITRISE_SOURCE_DIR/ios-sim-build/Build/Products" -maxdepth 2 -name 'CounterApp.app' | head -1)"
+            envman add --key BITRISE_APP_DIR_PATH --value "$APP_PATH"
     - script@1.2.1:
         title: Ad-hoc codesign the built app
         inputs:

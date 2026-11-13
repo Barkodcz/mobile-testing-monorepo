@@ -165,21 +165,29 @@ workflows:
     - cocoapods-install@3.1.1:
         inputs:
         - source_root_path: $BITRISE_SOURCE_DIR/apps/react-native/ios
-    - xcode-build-for-simulator@3.0.3:
+    - script@1.2.1:
+        title: Build for simulator (raw xcodebuild build, not archive)
         inputs:
-        # Release, not the scheme's default Debug: same reason as the
-        # Android build above -- Debug needs Metro bundler running to
+        # xcode-build-for-simulator's `xcodebuild archive` tags the output
+        # for the device platform regardless of -destination/-sdk flags
+        # (confirmed live, twice, on both this app and the native CounterApp)
+        # -- simctl then refuses to install it ("has code for platforms:
+        # [iOS, arm64]... device can run: iOS-simulator"). Build directly
+        # instead. Release, not the scheme's default Debug: same reason as
+        # the Android build above -- Debug needs Metro bundler running to
         # render anything. Release embeds the JS bundle (same as rn_detox_ios).
-        - project_path: apps/react-native/ios/CounterRN.xcworkspace
-        - scheme: CounterRN
-        - configuration: Release
-        - destination: platform=iOS Simulator,name=Bitrise iOS default,OS=latest
-        # Forces the simulator SDK explicitly -- `xcodebuild archive` doesn't
-        # reliably resolve it from -destination alone: it produced a
-        # device-platform binary that simctl refused to install ("has code
-        # for platforms: [iOS, arm64]... device can run: iOS-simulator",
-        # confirmed live on this exact workflow).
-        - xcodebuild_options: -sdk iphonesimulator
+        - content: |
+            set -eo pipefail
+            xcodebuild build \
+              -workspace apps/react-native/ios/CounterRN.xcworkspace \
+              -scheme CounterRN \
+              -configuration Release \
+              -sdk iphonesimulator \
+              -destination "platform=iOS Simulator,name=Bitrise iOS default,OS=latest" \
+              -derivedDataPath "$BITRISE_SOURCE_DIR/ios-sim-build" \
+              CODE_SIGNING_ALLOWED=NO
+            APP_PATH="$(find "$BITRISE_SOURCE_DIR/ios-sim-build/Build/Products" -maxdepth 2 -name 'CounterRN.app' | head -1)"
+            envman add --key BITRISE_APP_DIR_PATH --value "$APP_PATH"
     - script@1.2.1:
         title: Ad-hoc codesign the built app
         inputs:
