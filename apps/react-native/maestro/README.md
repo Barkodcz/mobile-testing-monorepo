@@ -19,10 +19,12 @@ other.
 
 - **Android**: `android-maestro-e2e-rn` workflow (builds a debug APK via Gradle, runs on an AVD).
 - **iOS**: `ios-maestro-e2e-rn` workflow (builds via `xcodebuild`/CocoaPods, runs on a
-  simulator). The flow files default to the Android `appId` (`com.counterrn`); the iOS workflow
-  overrides it at runtime with `maestro test --app-id org.reactjs.native.example.CounterRN` via
-  the Step's `additional_args` input, so one set of flow files covers both platforms instead of
-  maintaining two near-duplicates.
+  simulator). The flow files use `appId: ${MAESTRO_APP_ID}`; each workflow supplies its own
+  platform's app id with `maestro test -e MAESTRO_APP_ID=...` via the Step's `additional_args`
+  input (Android: `com.counterrn`, iOS: `org.reactjs.native.example.CounterRN`), so one set of
+  flow files covers both platforms instead of maintaining two near-duplicates. (`maestro test`
+  has no `--app-id` flag -- an earlier version of this tried that and failed live with "Unknown
+  option: '--app-id'".)
 
 Both are manual-trigger only (not wired into the `react_native` pipeline's automatic triggers),
 to avoid adding simulator/emulator minutes to every push on top of the existing Detox workflow.

@@ -1,6 +1,6 @@
 # Same journey as the Detox test "increments and resets" (the reset half)
 # in apps/react-native/e2e/counter.e2e.js -- see maestro/README.md.
-appId: com.counterrn
+appId: ${MAESTRO_APP_ID}
 name: Reset brings the counter back to zero
 ---
 - startRecording: recording

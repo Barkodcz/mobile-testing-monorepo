@@ -282,7 +282,7 @@ the Maestro 2.12.1 bump resolved the launch-denial blocker.
 | 2 | Maestro on React Native (Android + iOS) | Android side **done, verified passing**; iOS side **blocked** on the same unresolved issue |
 | 3a | XCUITest sharded pipeline | **Done, verified passing** — build→calc→shard-1/shard-2 all succeeded, each shard its own Tests tab entry |
 | 3b | Maestro sharded pipeline (Android) | **Done, verified passing** — shard 3 correctly skips with 0 flows at the default shard count |
-| 4 | Android instrumentation on VDT | **Written, needs you to enable the add-on** — see secrets table |
+| 4 | Android instrumentation on VDT | **Done, verified passing** — add-on enabled, run confirmed live |
 | 5 | Appium local (Android + iOS) | Android side **done, verified passing**; iOS side **blocked** on the same unresolved issue |
 | 6 | Classic XCTest next to Swift Testing | **Done, verified** — both classes show separately in the Tests tab |
 | 7 | fastlane `scan` variant | **Done, verified passing** |
@@ -308,8 +308,8 @@ needs the VDT add-on enabled.
 ## Secrets / accounts you need to add in Bitrise
 
 - **Virtual Device Testing add-on** (Bitrise dashboard → this app → Add-ons → enable Virtual
-  Device Testing) — required for `android-espresso-vdt` (scenario 4) to run. No separate
-  Firebase/GCP credential: once enabled, `virtual-device-testing-for-android`'s `api_token`
-  input resolves from the auto-provisioned `$ADDON_VDTESTING_API_TOKEN`.
-- `BROWSERSTACK_USERNAME` / `BROWSERSTACK_ACCESS_KEY` — unchanged, pre-existing requirement for
-  `appium_browserstack`, not part of this round of scenarios.
+  Device Testing) — required for `android-espresso-vdt` (scenario 4). **Enabled and verified**:
+  `virtual-device-testing-for-android`'s `api_token` input resolves from the auto-provisioned
+  `$ADDON_VDTESTING_API_TOKEN`, no separate Firebase/GCP credential needed.
+- `BROWSERSTACK_USERNAME` / `BROWSERSTACK_ACCESS_KEY` — still missing, pre-existing requirement
+  for `appium_browserstack`, not part of this round of scenarios.

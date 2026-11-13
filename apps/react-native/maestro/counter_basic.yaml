@@ -2,11 +2,11 @@
 # "increments and resets" in apps/react-native/e2e/counter.e2e.js -- see
 # maestro/README.md for the full mapping.
 #
-# appId defaults to the Android package; the iOS workflow overrides it at
-# runtime with `maestro test --app-id org.reactjs.native.example.CounterRN`
-# (via the Step's additional_args input) so one flow file covers both
-# platforms instead of forking it.
-appId: com.counterrn
+# appId is parameterized via ${MAESTRO_APP_ID} -- `maestro test` has no
+# --app-id flag (confirmed live: "Unknown option: '--app-id'"), so each
+# workflow passes its platform's app id with `-e MAESTRO_APP_ID=...` via the
+# Step's additional_args input, letting one flow file cover both platforms.
+appId: ${MAESTRO_APP_ID}
 name: Counter starts at zero and increments
 ---
 - startRecording: recording

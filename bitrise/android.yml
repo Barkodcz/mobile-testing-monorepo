@@ -176,12 +176,11 @@ workflows:
       Testing add-on (Firebase Test Lab) instead of a local emulator.
       android_ui_tests is untouched. Manual-trigger only.
 
-      BLOCKER: needs the Virtual Device Testing add-on enabled on this app
-      (Bitrise dashboard -> app -> Add-ons), which provisions
+      Needs the Virtual Device Testing add-on enabled on this app (Bitrise
+      dashboard -> app -> Add-ons), which provisions
       $ADDON_VDTESTING_API_TOKEN automatically -- no Firebase/GCP service
-      account needed, VDT's api_token input already defaults to that Env
-      Var. Written and ready, but unverified until the add-on is enabled.
-      See docs/new-test-scenarios-plan.md.
+      account needed. Add-on enabled and run verified passing. See
+      docs/new-test-scenarios-plan.md.
     meta:
       bitrise.io:
         stack: ubuntu-noble-24.04-bitrise-2025-android

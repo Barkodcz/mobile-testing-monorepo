@@ -100,6 +100,15 @@ def ios_driver(request):
     options = XCUITestOptions()
     options.app = os.environ["APPIUM_IOS_APP_PATH"]
     options.automation_name = "XCUITest"
+    # Without this, Appium tries to bring the Simulator.app GUI to the
+    # foreground itself before attaching -- which fails on Bitrise's
+    # osx-xcode-27.2.x stack ("Got an unexpected error while opening
+    # Simulator UI: The file .../Simulator.app does not exist", confirmed
+    # live). We already boot the simulator headlessly via `xcrun simctl
+    # boot`/`bootstatus` in the workflow, which every other simctl-driven
+    # workflow here (ios_ui_tests, ios-maestro-e2e, ios-fastlane-scan) relies
+    # on without ever needing the GUI app, so skip Appium's own GUI-open step.
+    options.is_headless = True
     ios_udid = os.environ.get("APPIUM_IOS_UDID")
     if ios_udid:
         # Attach to the exact simulator instance CI already booted and

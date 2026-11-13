@@ -141,6 +141,7 @@ workflows:
         - test_name: Maestro E2E (React Native / Android)
         - maestro_version: 2.12.1
         - num_flaky_test_attempts: 1
+        - additional_args: -e MAESTRO_APP_ID=com.counterrn
     - save-npm-cache@1.2.1: {}
     - deploy-to-bitrise-io@2.26.2:
         is_always_run: true
@@ -148,8 +149,8 @@ workflows:
   ios-maestro-e2e-rn:
     summary: >
       Same Maestro flows as android-maestro-e2e-rn, against the React Native
-      app's iOS build. Overrides the flow files' Android appId at runtime
-      since one set of flows covers both platforms -- see
+      app's iOS build. Passes the iOS appId via `-e MAESTRO_APP_ID=...` since
+      one set of flows covers both platforms -- see
       apps/react-native/maestro/README.md. Manual-trigger only.
     meta:
       bitrise.io:
@@ -211,7 +212,7 @@ workflows:
         - test_name: Maestro E2E (React Native / iOS)
         - maestro_version: 2.12.1
         - num_flaky_test_attempts: 1
-        - additional_args: --app-id org.reactjs.native.example.CounterRN
+        - additional_args: -e MAESTRO_APP_ID=org.reactjs.native.example.CounterRN
     - save-npm-cache@1.2.1: {}
     - deploy-to-bitrise-io@2.26.2:
         is_always_run: true
