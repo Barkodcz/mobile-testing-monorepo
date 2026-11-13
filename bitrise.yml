@@ -28,8 +28,10 @@ app:
   # Controls video recording across every UI/E2E test suite: all | failures | off.
   # Where a framework supports "keep only on failure" natively (Detox, Patrol),
   # this maps to it directly. Where it doesn't, scripts/recording helpers delete
-  # the video for passing tests before export. Default: failures.
-  - RECORD_VIDEO: failures
+  # the video for passing tests before export. Default: all -- this repo's goal
+  # is to showcase as much recorded evidence as possible, so every run's video
+  # is kept and attached to the Tests tab regardless of pass/fail.
+  - RECORD_VIDEO: all
   # One cheap device by default for android-espresso-vdt (Virtual Device
   # Testing / Firebase Test Lab); override in the Bitrise UI for more
   # devices/OS versions. Format: deviceID,version,language,orientation per line.
