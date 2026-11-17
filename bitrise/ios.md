@@ -63,17 +63,22 @@ pipeline stages don't inherit `meta` from each other.
 
 ### Tools
 
-- **XcodeGen** — installed via `brew install xcodegen` in `_ios_setup`, then
-  `xcodegen generate` turns [`apps/ios/project.yml`](../apps/ios/project.yml)
-  into `CounterApp.xcodeproj`. Nothing else in the repo generates or commits
-  the `.xcodeproj`; every workflow regenerates it fresh from `before_run: [_ios_setup]`.
+- **XcodeGen** — handled by the `xcodegen@0.0.5` Step in `_ios_setup` (its
+  `deps.brew: xcodegen` installs the CLI itself; the Step then runs
+  `xcodegen generate` using the `spec_path`/`project_path` inputs) to turn
+  [`apps/ios/project.yml`](../apps/ios/project.yml) into `CounterApp.xcodeproj`.
+  This replaced a two-line `brew install xcodegen && xcodegen generate`
+  script — functionally identical, but note `xcodegen@0.0.5` is
+  **community-maintained** (last published 2019, single-commit source); see
+  §9.
 - **CocoaPods** — not used. The only external dependency is a Swift Package
   (`SnapshotTesting`, resolved by Xcode itself during the build/test step).
 - **xcpretty** — installed ad hoc in `ios_ui_tests_manual` only
   (`gem install xcpretty`), to convert `xcodebuild test`'s raw output into
   JUnit XML.
-- **fastlane** — installed ad hoc in `ios-fastlane-scan` only
-  (`gem install fastlane -v '~> 2.223'`).
+- **fastlane** — installed by the `fastlane@3.5.3` Step's own
+  `update_fastlane` input (default `true`) in `ios-fastlane-scan`; no
+  separate `gem install` step needed.
 - **ffmpeg** — expected to be preinstalled on the stack image; used by
   [`scripts/recording/stop-ios-sim.sh`](../scripts/recording/stop-ios-sim.sh)
   to convert `.mov` → `.mp4`. Not installed by any step in this file — if
@@ -161,7 +166,7 @@ there is nothing here that implies an external credential dependency.
 | Step | What it does | Inputs | Notes |
 |---|---|---|---|
 | `git-clone@8.5.2` | "Git Clone Repository" — checks out the repo (PR-merge/branch-head/tag/commit depending on trigger) and exports git metadata. | defaults | |
-| `script@1.2.1` — "Generate Xcode project (XcodeGen)" | Installs XcodeGen via Homebrew, then runs `xcodegen generate` to turn `project.yml` into `CounterApp.xcodeproj`. | `working_dir: $BITRISE_SOURCE_DIR/apps/ios`; script: `set -eo pipefail`, `brew install xcodegen`, `xcodegen generate` | `set -eo pipefail` means any failed command (including in a pipeline) aborts the step immediately — if `brew install` or `xcodegen generate` fails, nothing downstream silently continues on a stale/missing project. |
+| `xcodegen@0.0.5` — "Generate Xcode project" | Installs XcodeGen (via the Step's own `deps.brew: xcodegen`) and runs `xcodegen generate` to turn `project.yml` into `CounterApp.xcodeproj`. Replaced a two-line `brew install xcodegen && xcodegen generate` script. | `spec_path: $BITRISE_SOURCE_DIR/apps/ios/project.yml`; `project_path: $BITRISE_SOURCE_DIR/apps/ios` | Community-maintained Step (not Bitrise-official), last published 2019 — functionally equivalent to the script it replaced, but worth knowing it's a lower-maintenance dependency than the official Steps elsewhere in this file. Confirmed working live across every iOS workflow (they all go through `_ios_setup`). |
 
 Every other workflow in this file (except the shard-calc/shard-1/shard-2
 stages) starts with `before_run: [_ios_setup]`.
@@ -216,8 +221,8 @@ attachment (same mechanism as `ios_ui_tests_manual`).
 
 | # | Step | What it does | Inputs | Notes |
 |---|---|---|---|---|
-| 1 | `script@1.2.1` — "Install fastlane and start recording" | Installs fastlane at `~> 2.223`, boots the simulator, starts recording. | script: `gem install fastlane -v '~> 2.223' --no-document`; `xcrun simctl boot …`; `start-ios-sim.sh booted $BITRISE_SOURCE_DIR/recordings/ios-fastlane-scan.mov` | |
-| 2 | `script@1.2.1` — "Run fastlane scan" | Runs the `scan_xcuitest` lane from [`apps/ios/fastlane/Fastfile`](../apps/ios/fastlane/Fastfile). | `working_dir: $BITRISE_SOURCE_DIR/apps/ios`; `set -eo pipefail`; `mkdir -p test-results`; `fastlane scan_xcuitest` | The lane itself (see Fastfile) calls `scan(project: "CounterApp.xcodeproj", scheme: "CounterApp-UI", devices: ["Bitrise iOS default"], output_directory: "test-results", output_types: "junit", output_files: "xcuitest.xml", clean: false, skip_slack: true, skip_build: false)` — note `devices` takes the same `"Bitrise iOS default"` alias as a device *name*, which `scan`/`fastlane` resolves against the already-booted simulator. |
+| 1 | `script@1.2.1` — "Boot simulator and start recording" | Boots the simulator, starts recording. | script: `xcrun simctl boot …`; `start-ios-sim.sh booted $BITRISE_SOURCE_DIR/recordings/ios-fastlane-scan.mov` | Previously this step also ran `gem install fastlane -v '~> 2.223' --no-document` — that's now handled by the `fastlane@3.5.3` Step below (its `update_fastlane` input defaults to `true`), so this step only boots the simulator and starts recording. |
+| 2 | `fastlane@3.5.3` | Official "fastlane" Step. Installs/updates the fastlane gem, then runs the `scan_xcuitest` lane from [`apps/ios/fastlane/Fastfile`](../apps/ios/fastlane/Fastfile). Replaced a `gem install fastlane` + `fastlane scan_xcuitest` script pair. | `lane: scan_xcuitest`; `work_dir: $BITRISE_SOURCE_DIR/apps/ios` | The lane itself (see Fastfile) calls `scan(project: "CounterApp.xcodeproj", scheme: "CounterApp-UI", devices: ["Bitrise iOS default"], output_directory: "test-results", output_types: "junit", output_files: "xcuitest.xml", clean: false, skip_slack: true, skip_build: false)` — note `devices` takes the same `"Bitrise iOS default"` alias as a device *name*, which `scan`/`fastlane` resolves against the already-booted simulator. The Step's `update_fastlane` input (default `true`) replaces the manual `gem install` the previous script-based version needed; fastlane's own `scan` action creates `output_directory` itself, so the old script's `mkdir -p test-results` line was also unnecessary and was dropped. Confirmed working live (build #188/#206 and others). |
 | 3 | `script@1.2.1` — "Stop recording and attach it to the Tests tab" | Stops/converts the recording, then (if non-empty) runs [`attach_media_to_junit.py add-recording-testcase`](../scripts/reporting/attach_media_to_junit.py) to inject a synthetic passing test case into `xcuitest.xml` and copy the `.mp4` using the Bitrise attachment-naming convention. | `working_dir: .../apps/ios`; `--classname CounterAppUITests.CounterUITests`; `--media …ios-fastlane-scan.mp4`; `--dest-dir test-results` | `--name` isn't passed, so the script's default `zz_session_recording` is used as the synthetic test-case name (the `zz_` prefix sorts it after the real test cases in most UIs). The script itself respects `$RECORD_VIDEO` (off/failures/all) and never fails the build on any attachment error. |
 | 4 | `custom-test-results-export@2.0.0` | "Export test results to Test Reports" — packages `test-results/xcuitest.xml` (and its sibling attachment files) for the next `deploy-to-bitrise-io` step to pick up, since `scan`'s JUnit output isn't auto-detected the way `xcode-test`'s `.xcresult` is. | `test_name: XCUITest UI tests (fastlane scan)`; `base_path: $BITRISE_SOURCE_DIR/apps/ios/test-results`; `search_pattern: */xcuitest.xml` | |
 | 5 | `deploy-to-bitrise-io@2.26.2` | Uploads Artifacts + the exported test results. | `is_always_run: true` | |

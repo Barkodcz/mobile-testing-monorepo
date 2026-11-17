@@ -247,23 +247,22 @@ override, matching the root default stack but a larger machine).
    `tag: google_apis`, `abi: x86_64`. Creates and boots an Android Virtual Device matching a
    Pixel 6 on API 34 with Google APIs, x86_64 (suitable for the Linux CI host, which can't run
    ARM images at reasonable speed without nested virtualization).
-5. **`script@1.2.1`**, titled "Build release APK". `working_dir`:
-   `.../apps/react-native/android`.
-   ```bash
-   ./gradlew :app:assembleRelease
-   ```
-   Builds the **Release** variant of the Android app. The inline comment is explicit about why
-   Release and not Debug: "debug builds need the Metro bundler running to render anything
-   (classic RN gotcha — confirmed live: a debug APK here showed neither 'Count: 0' nor
-   increment_button at all)." It also notes the project's release `signingConfig` already
-   points at the debug keystore, so the Release APK installs without needing real signing
-   credentials.
+5. **`android-build@1.2.0`** — *Android Build*. Official Step; replaced a
+   `./gradlew :app:assembleRelease` script. Inputs: `project_location:
+   $BITRISE_SOURCE_DIR/apps/react-native/android`, `module: app`, `variant: release`.
+   Builds the **Release** variant of the Android app, exporting its path as `$BITRISE_APK_PATH`.
+   The YAML's own comment (kept as a standalone comment above the step since the Step itself has
+   no `title` input) is explicit about why Release and not Debug: "debug builds need the Metro
+   bundler running to render anything (classic RN gotcha — confirmed live: a debug APK here
+   showed neither 'Count: 0' nor increment_button at all)." It also notes the project's release
+   `signingConfig` already points at the debug keystore, so the Release APK installs without
+   needing real signing credentials.
 6. **`wait-for-android-emulator@1.0.10`** — *Wait for Android emulator*. No inputs overridden
    (defaults to `$BITRISE_EMULATOR_SERIAL`, the output of step 4). Blocks until the AVD created
    in step 4 finishes booting, before Maestro tries to install/launch on it.
 7. **`maestro-test@1.2.0`** — *Maestro Test*. Inputs:
-   - `app_path`: the built release APK path
-     (`.../android/app/build/outputs/apk/release/app-release.apk`).
+   - `app_path: $BITRISE_APK_PATH` — the built release APK's path, exported natively by the
+     preceding `android-build@1.2.0` step.
    - `flow_path`: `.../apps/react-native/maestro` (the whole flow directory; the directory's
      own [`config.yaml`](../apps/react-native/maestro/config.yaml) just says "run every
      `*.yaml`").

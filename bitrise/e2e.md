@@ -150,25 +150,29 @@ BrowserStack's API.
 
 ```
 android-maestro-shard-build
-        │  (deploy-to-bitrise-io uploads MAESTRO_SHARD_APK_PATH
+        │  (deploy-to-bitrise-io uploads BITRISE_APK_PATH
         │   as a pipeline intermediate file)
         ├──► android-maestro-shard-1  (depends_on: [android-maestro-shard-build])
         ├──► android-maestro-shard-2  (depends_on: [android-maestro-shard-build])
         └──► android-maestro-shard-3  (depends_on: [android-maestro-shard-build])
 ```
 
-- **Build stage** (`android-maestro-shard-build`): runs `./gradlew
-  :app:assembleDebug`, then `envman add --key MAESTRO_SHARD_APK_PATH --value
-  ".../app-debug.apk"` so the path is available as an env var within that
-  workflow. Its `deploy-to-bitrise-io@2.26.2` step then sets
-  `pipeline_intermediate_files: MAESTRO_SHARD_APK_PATH` — this tells the step
+- **Build stage** (`android-maestro-shard-build`): runs the `android-build@1.2.0`
+  Step (`project_location: apps/android`, `module: app`, `variant: debug`),
+  which exports the built APK's path as `$BITRISE_APK_PATH` natively. Its
+  `deploy-to-bitrise-io@2.26.2` step then sets
+  `pipeline_intermediate_files: BITRISE_APK_PATH` — this tells the step
   to upload the *file at the path named by that env var's value* as a
   pipeline intermediate file (the generic mechanism is explained in
-  [`../docs/BITRISE_CONCEPTS.md`](../docs/BITRISE_CONCEPTS.md)).
+  [`../docs/BITRISE_CONCEPTS.md`](../docs/BITRISE_CONCEPTS.md)). This used to
+  be a `./gradlew :app:assembleDebug` script with a manual
+  `envman add --key MAESTRO_SHARD_APK_PATH` line — replaced so the APK path
+  comes straight from the Step's own output instead of a hand-constructed
+  one.
 - **Each shard workflow** starts with `pull-intermediate-files@1.3.7` with
   `artifact_sources: android-maestro-shard-build`, which re-downloads that
-  APK and re-exposes `MAESTRO_SHARD_APK_PATH` so `maestro-test` can use
-  `app_path: $MAESTRO_SHARD_APK_PATH` without rebuilding.
+  APK and re-exposes `BITRISE_APK_PATH` so `maestro-test` can use
+  `app_path: $BITRISE_APK_PATH` without rebuilding.
 - **Flow-file subset per shard**: each shard runs an inline script ("Assign
   this shard's flows") that does round-robin selection by alphabetically
   sorted flow filename:
@@ -193,9 +197,9 @@ android-maestro-shard-build
 | 1 | `git-clone@8.5.2` — *Git Clone Repository* | Checks out the repo and exports git metadata. | *(defaults)* | Standard first step. |
 | 2 | `restore-gradle-cache@3.1.2` — *Restore Gradle Cache* | Restores Gradle dependency caches via Bitrise's key-based caching. | *(defaults)* | Pairs with `save-gradle-cache` later. |
 | 3 | `avd-manager@2.2.0` — *AVD Manager* | Creates and boots an Android emulator for device testing. StepLib warns emulators can't run on Apple Silicon machines — consistent with this workflow's Linux stack. | `profile: pixel_6`, `api_level: "34"`, `tag: google_apis`, `abi: x86_64` | Outputs `BITRISE_EMULATOR_SERIAL`, consumed implicitly by the next `wait-for-android-emulator` step's default input. |
-| 4 | `script@1.2.1` — *Build debug APK* | Runs an arbitrary shell script. | `working_dir: $BITRISE_SOURCE_DIR/apps/android`, `content: ./gradlew :app:assembleDebug` | Produces `apps/android/app/build/outputs/apk/debug/app-debug.apk`. Gradle task name comes from the single `:app` module declared in [`settings.gradle.kts`](../apps/android/settings.gradle.kts) and the `com.android.application` plugin in [`app/build.gradle.kts`](../apps/android/app/build.gradle.kts). |
+| 4 | `android-build@1.2.0` — *Android Build* | Official Step: installs Gradle dependencies and builds an APK/AAB, exporting its path as `$BITRISE_APK_PATH`. Replaced a `./gradlew :app:assembleDebug` script. | `project_location: $BITRISE_SOURCE_DIR/apps/android`, `module: app`, `variant: debug` | Produces `apps/android/app/build/outputs/apk/debug/app-debug.apk`, matched by the Step's own default `app_path_pattern` (`*/build/outputs/apk/*.apk`) and exported as `$BITRISE_APK_PATH` — no manual path construction needed downstream. Gradle task resolution comes from the single `:app` module declared in [`settings.gradle.kts`](../apps/android/settings.gradle.kts) and the `com.android.application` plugin in [`app/build.gradle.kts`](../apps/android/app/build.gradle.kts). Confirmed working live (build #189/#199). |
 | 5 | `wait-for-android-emulator@1.0.10` — *Wait for Android emulator* | Waits for the AVD to finish booting (reads `$BITRISE_EMULATOR_SERIAL` by default). | *(defaults)* | Runs after the APK build rather than right after step 3 — harmless ordering since boot and Gradle build happen in parallel wall-clock time either way, but it does mean a slow emulator boot is only waited-for once the build is already done. |
-| 6 | `maestro-test@1.2.0` — *Maestro Test* | Installs the Maestro CLI, installs the app on the device, runs `maestro test`, and exports results (JUnit + screenshots + `startRecording` videos + command logs per test case) to the Test Reports page; also zips the Maestro output folder as an artifact. | `app_path: .../app-debug.apk`, `flow_path: $BITRISE_SOURCE_DIR/e2e/maestro`, `test_name: "Maestro E2E (Android)"`, `num_flaky_test_attempts: 1` | `flow_path` points at the whole `e2e/maestro/` directory, so both `counter_basic.yaml` and `counter_reset.yaml` run (per [`config.yaml`](../e2e/maestro/config.yaml)'s `flows: ["*.yaml"]` glob). `num_flaky_test_attempts: 1` means one retry of a failed flow before it's reported as failed. Maestro CLI version not pinned here (StepLib default `2.11.0`), unlike the sharded workflows which pin `2.12.1` — a minor inconsistency worth aligning if reproducibility across workflows matters. |
+| 6 | `maestro-test@1.2.0` — *Maestro Test* | Installs the Maestro CLI, installs the app on the device, runs `maestro test`, and exports results (JUnit + screenshots + `startRecording` videos + command logs per test case) to the Test Reports page; also zips the Maestro output folder as an artifact. | `app_path: $BITRISE_APK_PATH`, `flow_path: $BITRISE_SOURCE_DIR/e2e/maestro`, `test_name: "Maestro E2E (Android)"`, `num_flaky_test_attempts: 1` | `flow_path` points at the whole `e2e/maestro/` directory, so both `counter_basic.yaml` and `counter_reset.yaml` run (per [`config.yaml`](../e2e/maestro/config.yaml)'s `flows: ["*.yaml"]` glob). `num_flaky_test_attempts: 1` means one retry of a failed flow before it's reported as failed. Maestro CLI version not pinned here (StepLib default `2.11.0`), unlike the sharded workflows which pin `2.12.1` — a minor inconsistency worth aligning if reproducibility across workflows matters. |
 | 7 | `save-gradle-cache@1.6.2` — *Save Gradle Cache* | Saves the Gradle caches restored in step 2. | *(defaults)* | |
 | 8 | `deploy-to-bitrise-io@2.26.2` — *Deploy to Bitrise.io* | Uploads build artifacts to the Artifacts tab and test results to the Tests tab. | `is_always_run: true` | No `pipeline_intermediate_files` input set — this workflow isn't part of a pipeline, so nothing to share forward. `is_always_run: true` ensures results/artifacts are still deployed even if `maestro-test` failed. |
 
@@ -205,7 +209,7 @@ android-maestro-shard-build
 |---|---|---|---|---|
 | 1 | `git-clone@8.5.2` | Checkout. | *(defaults)* | |
 | 2 | `restore-gradle-cache@3.1.2` | Restore Gradle cache. | *(defaults)* | |
-| 3 | `script@1.2.1` — *Build release APK* | Shell script. | `working_dir: .../apps/android`, `content: ./gradlew :app:assembleRelease` | Builds the **release** variant (unlike `maestro_android`'s debug build) because BrowserStack needs an installable APK and the release build type is configured in [`app/build.gradle.kts`](../apps/android/app/build.gradle.kts) to self-sign with the debug key ("Sample only: sign release with the debug key so Appium/BrowserStack can install it" per its own comment) — otherwise a real release build would be unsigned/unverifiable. |
+| 3 | `android-build@1.2.0` — *Android Build* | Same official Step as §4.1 step 4, `variant: release` this time. Replaced a `./gradlew :app:assembleRelease` script. | `project_location: $BITRISE_SOURCE_DIR/apps/android`, `module: app`, `variant: release` | Builds the **release** variant (unlike `maestro_android`'s debug build) because BrowserStack needs an installable APK and the release build type is configured in [`app/build.gradle.kts`](../apps/android/app/build.gradle.kts) to self-sign with the debug key ("Sample only: sign release with the debug key so Appium/BrowserStack can install it" per its own comment) — otherwise a real release build would be unsigned/unverifiable. Exports `$BITRISE_APK_PATH`, consumed by the next step. |
 | 4 | `script@1.2.1` — *Upload APK to BrowserStack and run Appium tests* | Shell script, see breakdown below. | `working_dir: $BITRISE_SOURCE_DIR/e2e/appium` | |
 | 5 | `custom-test-results-export@2.0.0` — *Export test results to Test Reports* | Searches for test results and packages them (creates `test-info.json`) for the subsequent `deploy-to-bitrise-io` step to pick up — needed because `pytest --junitxml` doesn't natively export to Bitrise's Test Reports the way `maestro-test` does. | `test_name: "Appium on BrowserStack"`, `base_path: $BITRISE_SOURCE_DIR/e2e/appium/test-results`, `search_pattern: "*/appium.xml"` | `is_always_run: true`. The inline comment explains the screenshot/video attachment is automatic because `conftest.py`'s `driver` fixture already writes files into `test-results/` named `<classname>__<name>__<label>.<ext>`, matching Bitrise's attachment-naming convention — "no separate zip/copy step needed." |
 | 6 | `save-gradle-cache@1.6.2` | Save Gradle cache. | *(defaults)* | |
@@ -214,16 +218,18 @@ android-maestro-shard-build
 **Step 4 script, line by line:**
 ```bash
 set -eo pipefail
-APK="$BITRISE_SOURCE_DIR/apps/android/app/build/outputs/apk/release/app-release.apk"
 export BS_APP_URL=$(curl -sf -u "$BROWSERSTACK_USERNAME:$BROWSERSTACK_ACCESS_KEY" \
   -X POST "https://api-cloud.browserstack.com/app-automate/upload" \
-  -F "file=@$APK" | jq -r .app_url)
+  -F "file=@$BITRISE_APK_PATH" | jq -r .app_url)
 echo "Uploaded app: $BS_APP_URL"
 python3 -m venv .venv && . .venv/bin/activate
 pip install -q -r requirements.txt
 mkdir -p test-results
 pytest tests --junitxml=test-results/appium.xml
 ```
+(The `APK="..."` manual path-construction line this script used to have is
+gone — `$BITRISE_APK_PATH` now comes straight from the preceding
+`android-build@1.2.0` step's output.)
 - `set -eo pipefail`: abort on any command failure, and make a pipeline's
   exit status the last non-zero command in it (so a failing `curl` upstream
   of `| jq` is caught, not masked by `jq`'s own success).
@@ -254,7 +260,7 @@ server instead of BrowserStack, reusing `test_counter.py` unchanged via the
 | 1 | `git-clone@8.5.2` | Checkout. | *(defaults)* | |
 | 2 | `restore-gradle-cache@3.1.2` | Restore Gradle cache. | *(defaults)* | |
 | 3 | `avd-manager@2.2.0` | Create/boot emulator. | same as §4.1 step 3 | |
-| 4 | `script@1.2.1` — *Build debug APK* | `./gradlew :app:assembleDebug` | `working_dir: .../apps/android` | Debug build here (not release) since there's no BrowserStack signing/upload requirement — the local Appium driver installs the APK directly. |
+| 4 | `android-build@1.2.0` — *Android Build* | Same official Step, `variant: debug`. Replaced a `./gradlew :app:assembleDebug` script. | `project_location: $BITRISE_SOURCE_DIR/apps/android`, `module: app`, `variant: debug` | Debug build here (not release) since there's no BrowserStack signing/upload requirement — the local Appium driver installs the APK directly, reading its path from `$BITRISE_APK_PATH`. |
 | 5 | `wait-for-android-emulator@1.0.10` | Wait for boot. | *(defaults)* | |
 | 6 | `script@1.2.1` — *Start local Appium server* | Shell script, see breakdown below. | *(no working_dir override — defaults to `$BITRISE_SOURCE_DIR`)* | |
 | 7 | `script@1.2.1` — *Run Appium tests (local)* | Shell script, see breakdown below. | `working_dir: $BITRISE_SOURCE_DIR/e2e/appium` | |
@@ -289,7 +295,7 @@ for _ in $(seq 1 30); do curl -sf http://localhost:4723/wd/hub/status && break; 
 set -eo pipefail
 export APPIUM_TARGET=local
 export APPIUM_SERVER_URL=http://localhost:4723/wd/hub
-export APPIUM_APK_PATH="$BITRISE_SOURCE_DIR/apps/android/app/build/outputs/apk/debug/app-debug.apk"
+export APPIUM_APK_PATH="$BITRISE_APK_PATH"
 python3 -m venv .venv && . .venv/bin/activate
 pip install -q -r requirements.txt
 mkdir -p test-results
@@ -310,21 +316,9 @@ pytest tests/test_counter.py --junitxml=test-results/appium-local.xml
 |---|---|---|---|---|
 | 1 | `git-clone@8.5.2` | Checkout. | *(defaults)* | |
 | 2 | `restore-gradle-cache@3.1.2` | Restore Gradle cache. | *(defaults)* | |
-| 3 | `script@1.2.1` — *Build debug APK* | Shell script, see below. | `working_dir: .../apps/android` | |
+| 3 | `android-build@1.2.0` — *Android Build* | Builds the debug APK, exporting `$BITRISE_APK_PATH`. Replaced a `./gradlew :app:assembleDebug` + manual `envman add --key MAESTRO_SHARD_APK_PATH` script. | `project_location: $BITRISE_SOURCE_DIR/apps/android`, `module: app`, `variant: debug` | No emulator is created in this workflow at all — it only builds the APK. |
 | 4 | `save-gradle-cache@1.6.2` | Save cache. | *(defaults)* | |
-| 5 | `deploy-to-bitrise-io@2.26.2` | Upload artifacts + pipeline intermediate file. | `is_always_run: true`, `pipeline_intermediate_files: MAESTRO_SHARD_APK_PATH` | This is the only `deploy-to-bitrise-io` invocation in `e2e.yml` that sets `pipeline_intermediate_files` — correctly, since this is the only workflow in the file that's a pipeline stage feeding others. |
-
-**Step 3 script:**
-```bash
-set -eo pipefail
-./gradlew :app:assembleDebug
-envman add --key MAESTRO_SHARD_APK_PATH \
-  --value "$BITRISE_SOURCE_DIR/apps/android/app/build/outputs/apk/debug/app-debug.apk"
-```
-No emulator is created in this workflow at all — it only builds the APK.
-`envman add` persists `MAESTRO_SHARD_APK_PATH` as a Bitrise env var for the
-rest of the workflow (and it's this env var's *value*, not its *name*, that
-`pipeline_intermediate_files` uploads).
+| 5 | `deploy-to-bitrise-io@2.26.2` | Upload artifacts + pipeline intermediate file. | `is_always_run: true`, `pipeline_intermediate_files: BITRISE_APK_PATH` | This is the only `deploy-to-bitrise-io` invocation in `e2e.yml` that sets `pipeline_intermediate_files` — correctly, since this is the only workflow in the file that's a pipeline stage feeding others. Uses the Step's own `BITRISE_APK_PATH` output directly — no custom env var needed, unlike the previous script-based version's `MAESTRO_SHARD_APK_PATH`. |
 
 ### 4.5 `android-maestro-shard-1` / `-2` / `-3`
 
@@ -335,11 +329,11 @@ the `awk` filter, the `test_name`, and the temp directory name. Walkthrough
 | # | Step | Purpose | Key inputs | Notes |
 |---|---|---|---|---|
 | 1 | `git-clone@8.5.2` | Checkout. | *(defaults)* | |
-| 2 | `pull-intermediate-files@1.3.7` — *Pull Pipeline intermediate files* | Downloads intermediate files produced by a prior pipeline stage. | `artifact_sources: android-maestro-shard-build` | Restores `MAESTRO_SHARD_APK_PATH` (both the file and, implicitly, the env var pointing at it) from the build stage. |
+| 2 | `pull-intermediate-files@1.3.7` — *Pull Pipeline intermediate files* | Downloads intermediate files produced by a prior pipeline stage. | `artifact_sources: android-maestro-shard-build` | Restores `BITRISE_APK_PATH` (both the file and, implicitly, the env var pointing at it) from the build stage. |
 | 3 | `avd-manager@2.2.0` | Create/boot emulator. | same params as §4.1 | |
 | 4 | `script@1.2.1` — *Assign this shard's flows* | Shell script, see below. | *(no working_dir override)* | |
 | 5 | `wait-for-android-emulator@1.0.10` | Wait for boot. | *(defaults)* | |
-| 6 | `maestro-test@1.2.0` | Run Maestro flows. | `app_path: $MAESTRO_SHARD_APK_PATH`, `flow_path: /tmp/maestro-shard-1`, `test_name: "Maestro shard 1 (Android)"`, `maestro_version: 2.12.1`, `num_flaky_test_attempts: 1`, `run_if: '{{enveq "MAESTRO_SHARD_HAS_FLOWS" "true"}}'` | `run_if` conditionally skips the whole step when no flows were assigned to this shard — see §9. Each shard's distinct `test_name` ("Maestro shard 1/2/3 (Android)") is what gives each shard its own separate Tests-tab entry (see §6). |
+| 6 | `maestro-test@1.2.0` | Run Maestro flows. | `app_path: $BITRISE_APK_PATH`, `flow_path: /tmp/maestro-shard-1`, `test_name: "Maestro shard 1 (Android)"`, `maestro_version: 2.12.1`, `num_flaky_test_attempts: 1`, `run_if: '{{enveq "MAESTRO_SHARD_HAS_FLOWS" "true"}}'` | `run_if` conditionally skips the whole step when no flows were assigned to this shard — see §9. Each shard's distinct `test_name` ("Maestro shard 1/2/3 (Android)") is what gives each shard its own separate Tests-tab entry (see §6). |
 | 7 | `deploy-to-bitrise-io@2.26.2` | Deploy. | `is_always_run: true` | No `pipeline_intermediate_files` here — shards don't feed anything forward. |
 
 **Step 4 script ("Assign this shard's flows"), shard 1 version:**
@@ -507,7 +501,7 @@ bitrise run android-appium-local
 The sharded pipeline's individual workflows (`android-maestro-shard-1`,
 etc.) can technically also be run standalone with `bitrise run
 android-maestro-shard-1`, but doing so skips `android-maestro-shard-build`,
-so `MAESTRO_SHARD_APK_PATH` would need to be supplied another way (e.g. by
+so `BITRISE_APK_PATH` would need to be supplied another way (e.g. by
 building the APK locally first and exporting the env var) — running the full
 `android_maestro_sharded` **pipeline** from the Bitrise UI is the supported
 path, per the YAML's own repeated warnings (see §3).
