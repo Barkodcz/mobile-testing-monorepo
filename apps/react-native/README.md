@@ -1,3 +1,22 @@
+# This repo's React Native sample app
+
+A tiny React Native counter app (increment, decrement, reset) used as this monorepo's reference
+app for React Native testing frameworks on Bitrise. Same element IDs as the Android/iOS/Flutter
+sample apps (`count_label`, `decrement_button`, `increment_button`, `reset_button`, exposed as
+`testID`), so the same E2E journeys can be written once and ported across platforms.
+
+- **Test types**: Jest + React Native Testing Library (`__tests__/`), Jest snapshots, Detox E2E
+  (iOS, `e2e/`), Maestro E2E (both platforms, `maestro/`).
+- **Run locally**: `npm test` (Jest), `detox test` (after a Detox build — see `.detoxrc.js`),
+  `maestro test maestro/` (needs a running emulator/simulator with the app installed).
+- **CI**: see [`../../bitrise/react-native.md`](../../bitrise/react-native.md) for the full
+  Bitrise setup.
+
+The rest of this README is the unmodified React Native CLI boilerplate, kept for the standard
+"run the app" instructions below.
+
+---
+
 This is a new [**React Native**](https://reactnative.dev) project, bootstrapped using [`@react-native-community/cli`](https://github.com/react-native-community/cli).
 
 # Getting Started
