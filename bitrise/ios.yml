@@ -38,14 +38,10 @@ workflows:
     summary: Clone the repo and generate the Xcode project with XcodeGen.
     steps:
     - git-clone@8.5.2: {}
-    - script@1.2.1:
-        title: Generate Xcode project (XcodeGen)
+    - xcodegen@0.0.5:
         inputs:
-        - working_dir: $BITRISE_SOURCE_DIR/apps/ios
-        - content: |
-            set -eo pipefail
-            brew install xcodegen
-            xcodegen generate
+        - spec_path: $BITRISE_SOURCE_DIR/apps/ios/project.yml
+        - project_path: $BITRISE_SOURCE_DIR/apps/ios
 
   ios_unit_tests:
     summary: Unit tests (Swift Testing) and snapshot tests (swift-snapshot-testing).
@@ -194,21 +190,16 @@ workflows:
     before_run: [_ios_setup]
     steps:
     - script@1.2.1:
-        title: Install fastlane and start recording
+        title: Boot simulator and start recording
         inputs:
         - content: |
-            gem install fastlane -v '~> 2.223' --no-document
             xcrun simctl boot "Bitrise iOS default" 2>/dev/null || true
             $BITRISE_SOURCE_DIR/scripts/recording/start-ios-sim.sh booted \
               $BITRISE_SOURCE_DIR/recordings/ios-fastlane-scan.mov
-    - script@1.2.1:
-        title: Run fastlane scan
+    - fastlane@3.5.3:
         inputs:
-        - working_dir: $BITRISE_SOURCE_DIR/apps/ios
-        - content: |
-            set -eo pipefail
-            mkdir -p test-results
-            fastlane scan_xcuitest
+        - lane: scan_xcuitest
+        - work_dir: $BITRISE_SOURCE_DIR/apps/ios
     - script@1.2.1:
         title: Stop recording and attach it to the Tests tab
         is_always_run: true
