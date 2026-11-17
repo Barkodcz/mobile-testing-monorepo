@@ -123,20 +123,20 @@ workflows:
         - api_level: "34"
         - tag: google_apis
         - abi: x86_64
-    - script@1.2.1:
-        # Release, not debug: debug builds need the Metro bundler running to
-        # render anything (classic RN gotcha -- confirmed live: a debug APK
-        # here showed neither "Count: 0" nor increment_button at all).
-        # Release embeds the JS bundle; the project's signingConfig already
-        # points release at the debug keystore, so it installs fine as-is.
-        title: Build release APK
+    # Release, not debug: debug builds need the Metro bundler running to
+    # render anything (classic RN gotcha -- confirmed live: a debug APK
+    # here showed neither "Count: 0" nor increment_button at all).
+    # Release embeds the JS bundle; the project's signingConfig already
+    # points release at the debug keystore, so it installs fine as-is.
+    - android-build@1.2.0:
         inputs:
-        - working_dir: $BITRISE_SOURCE_DIR/apps/react-native/android
-        - content: ./gradlew :app:assembleRelease
+        - project_location: $BITRISE_SOURCE_DIR/apps/react-native/android
+        - module: app
+        - variant: release
     - wait-for-android-emulator@1.0.10: {}
     - maestro-test@1.2.0:
         inputs:
-        - app_path: $BITRISE_SOURCE_DIR/apps/react-native/android/app/build/outputs/apk/release/app-release.apk
+        - app_path: $BITRISE_APK_PATH
         - flow_path: $BITRISE_SOURCE_DIR/apps/react-native/maestro
         - test_name: Maestro E2E (React Native / Android)
         - maestro_version: 2.12.1

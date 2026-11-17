@@ -55,15 +55,15 @@ workflows:
         - api_level: "34"
         - tag: google_apis
         - abi: x86_64
-    - script@1.2.1:
-        title: Build debug APK
+    - android-build@1.2.0:
         inputs:
-        - working_dir: $BITRISE_SOURCE_DIR/apps/android
-        - content: ./gradlew :app:assembleDebug
+        - project_location: $BITRISE_SOURCE_DIR/apps/android
+        - module: app
+        - variant: debug
     - wait-for-android-emulator@1.0.10: {}
     - maestro-test@1.2.0:
         inputs:
-        - app_path: $BITRISE_SOURCE_DIR/apps/android/app/build/outputs/apk/debug/app-debug.apk
+        - app_path: $BITRISE_APK_PATH
         - flow_path: $BITRISE_SOURCE_DIR/e2e/maestro
         - test_name: Maestro E2E (Android)
         - num_flaky_test_attempts: 1
@@ -76,21 +76,20 @@ workflows:
     steps:
     - git-clone@8.5.2: {}
     - restore-gradle-cache@3.1.2: {}
-    - script@1.2.1:
-        title: Build release APK
+    - android-build@1.2.0:
         inputs:
-        - working_dir: $BITRISE_SOURCE_DIR/apps/android
-        - content: ./gradlew :app:assembleRelease
+        - project_location: $BITRISE_SOURCE_DIR/apps/android
+        - module: app
+        - variant: release
     - script@1.2.1:
         title: Upload APK to BrowserStack and run Appium tests
         inputs:
         - working_dir: $BITRISE_SOURCE_DIR/e2e/appium
         - content: |
             set -eo pipefail
-            APK="$BITRISE_SOURCE_DIR/apps/android/app/build/outputs/apk/release/app-release.apk"
             export BS_APP_URL=$(curl -sf -u "$BROWSERSTACK_USERNAME:$BROWSERSTACK_ACCESS_KEY" \
               -X POST "https://api-cloud.browserstack.com/app-automate/upload" \
-              -F "file=@$APK" | jq -r .app_url)
+              -F "file=@$BITRISE_APK_PATH" | jq -r .app_url)
             echo "Uploaded app: $BS_APP_URL"
             python3 -m venv .venv && . .venv/bin/activate
             pip install -q -r requirements.txt
@@ -129,11 +128,11 @@ workflows:
         - api_level: "34"
         - tag: google_apis
         - abi: x86_64
-    - script@1.2.1:
-        title: Build debug APK
+    - android-build@1.2.0:
         inputs:
-        - working_dir: $BITRISE_SOURCE_DIR/apps/android
-        - content: ./gradlew :app:assembleDebug
+        - project_location: $BITRISE_SOURCE_DIR/apps/android
+        - module: app
+        - variant: debug
     - wait-for-android-emulator@1.0.10: {}
     - script@1.2.1:
         title: Start local Appium server
@@ -154,7 +153,7 @@ workflows:
             set -eo pipefail
             export APPIUM_TARGET=local
             export APPIUM_SERVER_URL=http://localhost:4723/wd/hub
-            export APPIUM_APK_PATH="$BITRISE_SOURCE_DIR/apps/android/app/build/outputs/apk/debug/app-debug.apk"
+            export APPIUM_APK_PATH="$BITRISE_APK_PATH"
             python3 -m venv .venv && . .venv/bin/activate
             pip install -q -r requirements.txt
             mkdir -p test-results
@@ -187,20 +186,16 @@ workflows:
     steps:
     - git-clone@8.5.2: {}
     - restore-gradle-cache@3.1.2: {}
-    - script@1.2.1:
-        title: Build debug APK
+    - android-build@1.2.0:
         inputs:
-        - working_dir: $BITRISE_SOURCE_DIR/apps/android
-        - content: |
-            set -eo pipefail
-            ./gradlew :app:assembleDebug
-            envman add --key MAESTRO_SHARD_APK_PATH \
-              --value "$BITRISE_SOURCE_DIR/apps/android/app/build/outputs/apk/debug/app-debug.apk"
+        - project_location: $BITRISE_SOURCE_DIR/apps/android
+        - module: app
+        - variant: debug
     - save-gradle-cache@1.6.2: {}
     - deploy-to-bitrise-io@2.26.2:
         is_always_run: true
         inputs:
-        - pipeline_intermediate_files: MAESTRO_SHARD_APK_PATH
+        - pipeline_intermediate_files: BITRISE_APK_PATH
 
   android-maestro-shard-1:
     summary: >
@@ -242,7 +237,7 @@ workflows:
     - maestro-test@1.2.0:
         run_if: '{{enveq "MAESTRO_SHARD_HAS_FLOWS" "true"}}'
         inputs:
-        - app_path: $MAESTRO_SHARD_APK_PATH
+        - app_path: $BITRISE_APK_PATH
         - flow_path: /tmp/maestro-shard-1
         - test_name: Maestro shard 1 (Android)
         - maestro_version: 2.12.1
@@ -287,7 +282,7 @@ workflows:
     - maestro-test@1.2.0:
         run_if: '{{enveq "MAESTRO_SHARD_HAS_FLOWS" "true"}}'
         inputs:
-        - app_path: $MAESTRO_SHARD_APK_PATH
+        - app_path: $BITRISE_APK_PATH
         - flow_path: /tmp/maestro-shard-2
         - test_name: Maestro shard 2 (Android)
         - maestro_version: 2.12.1
@@ -336,7 +331,7 @@ workflows:
     - maestro-test@1.2.0:
         run_if: '{{enveq "MAESTRO_SHARD_HAS_FLOWS" "true"}}'
         inputs:
-        - app_path: $MAESTRO_SHARD_APK_PATH
+        - app_path: $BITRISE_APK_PATH
         - flow_path: /tmp/maestro-shard-3
         - test_name: Maestro shard 3 (Android)
         - maestro_version: 2.12.1
