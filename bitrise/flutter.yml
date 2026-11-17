@@ -286,9 +286,23 @@ workflows:
             flutter pub get
             dart pub global activate patrol_cli 4.8.0
             envman add --key PATH --value "$PATH:$HOME/.pub-cache/bin"   # keep the CLI on PATH for later steps
-    - cocoapods-install@3.1.1:
+    - script@1.2.1:
+        title: Pod install (if this Flutter version generated a Podfile)
         inputs:
-        - source_root_path: $BITRISE_SOURCE_DIR/apps/flutter/ios
+        # Flutter 3.24+ defaults new iOS projects to Swift Package Manager
+        # and only emits ios/Podfile when a plugin actually needs
+        # CocoaPods -- this app has none, so `flutter create` here produced
+        # no Podfile at all. cocoapods-install@3.1.1 hard-fails with "No
+        # Podfile found" in that case (confirmed live, build #171), so pod
+        # install has to be conditional instead of an unconditional Step.
+        - working_dir: $BITRISE_SOURCE_DIR/apps/flutter/ios
+        - content: |
+            set -eo pipefail
+            if [ -f Podfile ]; then
+              pod install
+            else
+              echo "No Podfile, skipping pod install (project uses Swift Package Manager)."
+            fi
     - script@1.2.1:
         title: Boot simulator for Patrol
         inputs:
