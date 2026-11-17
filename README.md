@@ -69,6 +69,8 @@ scripts/
 
 docs/
 ├── BITRISE_CONCEPTS.md          <- shared Bitrise concepts, explained once (linked from every doc above)
+├── TEST_VERIFICATION_GUIDE.md   <- runbook: every pipeline/workflow's pass criteria, how to trigger
+│                                    and verify the whole repo's CI end to end, last known-good baseline
 ├── TESTING_MASTER_GUIDE.md      <- consolidated deep-dive: every framework, every bug found and fixed, a
 │                                    reproduce-from-scratch playbook (overlaps with this README by design —
 │                                    this README is the map, that doc is the exhaustive reference)
@@ -123,6 +125,10 @@ reasoning for every row above.
    Or start any workflow/pipeline manually from the Bitrise UI (**Start build**) without waiting
    for a matching change — most of the "secondary approach" workflows in this repo (e.g. the
    manual-only XCUITest variants) are meant to be started this way.
+7. **Verify it actually worked**: [`docs/TEST_VERIFICATION_GUIDE.md`](docs/TEST_VERIFICATION_GUIDE.md)
+   has the full pipeline/workflow inventory, exact pass criteria per workflow, and a repeatable
+   full-sweep procedure — use it instead of eyeballing one green checkmark and assuming the rest
+   works too.
 
 ## Shared concepts
 
