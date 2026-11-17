@@ -3,7 +3,9 @@
 # requires -- `flutter create` only generates a unit test target
 # ("RunnerTests"), never a UI test target, so Patrol's own xctestrun patcher
 # has nothing real to attach to and the run fails with "Missing test product
-# at (null)". Safe to run many times: no-op if the target already exists.
+# at (null)". The target + its one source file mirror Patrol's own example
+# app's native setup (github.com/leancodepl/patrol packages/patrol/example).
+# Safe to run many times: no-op if the target already exists.
 # Usage (from apps/flutter): ruby tool/patrol_setup_ios.rb
 
 require 'xcodeproj'
@@ -40,23 +42,26 @@ runner_settings = runner_target.build_configurations.first.build_settings
 resolved = `xcodebuild -showBuildSettings -workspace #{File.join(ROOT, 'ios', 'Runner.xcworkspace')} -scheme Runner -sdk iphonesimulator 2>/dev/null`
 deployment_target = resolved[/IPHONEOS_DEPLOYMENT_TARGET = (\S+)/, 1] || '13.0'
 
-ui_test_target = project.new_target(:ui_test_bundle, TARGET_NAME, :ios, nil, nil, :swift)
+ui_test_target = project.new_target(:ui_test_bundle, TARGET_NAME, :ios, nil, nil, :objc)
 ui_test_target.add_dependency(runner_target)
 
+# This is Patrol's own required native glue (verbatim from its example app,
+# github.com/leancodepl/patrol packages/patrol/example/ios/RunnerUITests) --
+# the macro expands into the actual XCTestCase that starts Patrol's
+# AutomatorServer and bridges to the Dart-defined tests. `patrol` here is
+# the Swift package patrol_cli itself injects into the build at build time
+# (seen in its own build log as "Xcode is fetching Swift Package Manager
+# dependencies... patrol"), not something this project needs to declare.
 src_dir = File.join(ROOT, 'ios', TARGET_NAME)
 Dir.mkdir(src_dir) unless Dir.exist?(src_dir)
-src_file = File.join(src_dir, "#{TARGET_NAME}.swift")
-File.write(src_file, <<~SWIFT) unless File.exist?(src_file)
-  import XCTest
+src_file = File.join(src_dir, "#{TARGET_NAME}.m")
+File.write(src_file, <<~OBJC) unless File.exist?(src_file)
+  @import XCTest;
+  @import patrol;
+  @import ObjectiveC.runtime;
 
-  final class RunnerUITests: XCTestCase {
-    func testPlaceholder() {
-      // Patrol's own Automator server drives the Dart-defined tests at
-      // build/run time; this placeholder only exists so the required
-      // UI-testing-bundle target has a compilable source file.
-    }
-  }
-SWIFT
+  PATROL_INTEGRATION_TEST_IOS_RUNNER(RunnerUITests)
+OBJC
 
 group = project.main_group.find_subpath(TARGET_NAME, true)
 group.set_source_tree('<group>')
@@ -67,9 +72,9 @@ ui_test_target.build_configurations.each do |config|
   config.build_settings['PRODUCT_NAME'] = '$(TARGET_NAME)'
   config.build_settings['PRODUCT_BUNDLE_IDENTIFIER'] = BUNDLE_ID
   config.build_settings['TEST_TARGET_NAME'] = 'Runner'
-  config.build_settings['SWIFT_VERSION'] = runner_settings['SWIFT_VERSION'] || '5.0'
   config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = deployment_target
   config.build_settings['GENERATE_INFOPLIST_FILE'] = 'YES'
+  config.build_settings['CLANG_ENABLE_MODULES'] = 'YES' # required for @import in Objective-C
   config.build_settings['CODE_SIGN_STYLE'] = 'Automatic'
   config.build_settings['CODE_SIGNING_ALLOWED'] = 'NO'
   config.build_settings['CODE_SIGNING_REQUIRED'] = 'NO'

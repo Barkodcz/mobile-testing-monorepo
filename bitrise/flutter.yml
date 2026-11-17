@@ -267,15 +267,17 @@ workflows:
       target Patrol's iOS runner requires (flutter create only generates a
       unit test target, never a UI test target) -- without it, Patrol's own
       xctestrun patcher has nothing real to attach to and the run fails with
-      "Missing test product at (null)" (hit live on builds #173/#175, fixed
-      and re-verified locally end-to-end with the exact xcodebuild
-      build-for-testing + test-without-building invocations Patrol uses).
-      JUnit conversion and the screenshot/video attachment paths below are
-      still best-effort from Patrol's documented Android behavior and this
-      repo's existing iOS conventions -- the full `patrol test` run (Dart
-      side, screenshots, video) hasn't been confirmed live yet; expect to
-      adjust the "Collect Patrol results" step once you see Patrol's actual
-      iOS output layout on a real build.
+      "Missing test product at (null)" (hit live on builds #173/#175). Its
+      one source file, RunnerUITests.m, is Patrol's own required native
+      glue verbatim from its example app (github.com/leancodepl/patrol
+      packages/patrol/example/ios/RunnerUITests) -- an earlier placeholder
+      Swift file got the native plumbing green (build #179) without ever
+      exercising the real Dart test (Patrol reported "Total: 0"); this is
+      the actual fix. JUnit conversion and the screenshot/video attachment
+      paths below are still best-effort from Patrol's documented Android
+      behavior and this repo's existing iOS conventions -- expect to adjust
+      the "Collect Patrol results" step once you see Patrol's actual iOS
+      output layout on a real build with a passing Dart test.
     meta:
       bitrise.io:
         stack: osx-xcode-27.2.x
