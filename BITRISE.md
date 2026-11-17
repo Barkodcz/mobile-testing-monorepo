@@ -118,7 +118,13 @@ included, since the point is a quick cross-platform sanity check, not a full reg
    setup, when Bitrise asks where your `bitrise.yml` is, point it at the repo root — the
    `include:` list above is what pulls in every platform module.
 3. **Enable "stored in the repository" config** (requires an Enterprise-plan workspace, per §2
-   above) so the `include:` mechanism works — this is not the default for a brand-new app.
+   above) so the `include:` mechanism works — this is not the default for a brand-new app. This
+   is an app-wide **Workflow Editor → Configuration** toggle between "YAML stored on
+   bitrise.io" and "YAML stored in your Git repository" — double-check it's set to the git
+   option. Verify by editing something trivial in any `bitrise/*.yml`, pushing, and confirming
+   the build log for the next run reflects it (e.g. a changed `summary:` string, or a step you
+   just added/removed) — don't assume a push is being picked up just because a build runs; it
+   may be building the config bitrise.io has stored on its own side instead.
 4. **Stack and machine**: the root `meta` block (§2) already sets a sane Linux default; only
    override per-workflow if you add a workflow needing something different (already done for
    every Mac-only workflow in this repo).
@@ -131,6 +137,11 @@ included, since the point is a quick cross-platform sanity check, not a full reg
    path — the matching module's pipeline fires automatically per its `changed_files.regex`
    trigger (see [concepts §2](docs/BITRISE_CONCEPTS.md#2-triggers)). Or start any workflow/pipeline
    manually from the Bitrise UI without waiting for a matching change.
+7. **Verify it actually worked**: don't stop at one green build —
+   [`docs/TEST_VERIFICATION_GUIDE.md`](docs/TEST_VERIFICATION_GUIDE.md) has the full
+   pipeline/workflow inventory (27 execution units across 9 pipelines + 9 standalone workflows),
+   exact pass criteria per workflow, and a repeatable full-sweep procedure for confirming the
+   whole repo's CI, not just the one thing you changed.
 
 ## 7. Troubleshooting / known issues
 
