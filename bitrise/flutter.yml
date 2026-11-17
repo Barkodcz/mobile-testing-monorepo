@@ -263,12 +263,19 @@ workflows:
       Patrol's XCUITest-based iOS runner instead of its Android/Gradle one.
       Manual-trigger only (not added to the `flutter` pipeline) to avoid
       adding macOS minutes to every push; start it from the Bitrise UI.
+      tool/patrol_setup_ios.rb adds the native "RunnerUITests" XCUITest
+      target Patrol's iOS runner requires (flutter create only generates a
+      unit test target, never a UI test target) -- without it, Patrol's own
+      xctestrun patcher has nothing real to attach to and the run fails with
+      "Missing test product at (null)" (hit live on builds #173/#175, fixed
+      and re-verified locally end-to-end with the exact xcodebuild
+      build-for-testing + test-without-building invocations Patrol uses).
       JUnit conversion and the screenshot/video attachment paths below are
-      best-effort from Patrol's documented Android behavior and this repo's
-      existing iOS conventions -- unlike every other workflow in this repo,
-      this one has NOT been confirmed live yet; expect to adjust the
-      "Collect Patrol results" step once you see Patrol's actual iOS output
-      layout on a real build.
+      still best-effort from Patrol's documented Android behavior and this
+      repo's existing iOS conventions -- the full `patrol test` run (Dart
+      side, screenshots, video) hasn't been confirmed live yet; expect to
+      adjust the "Collect Patrol results" step once you see Patrol's actual
+      iOS output layout on a real build.
     meta:
       bitrise.io:
         stack: osx-xcode-27.2.x
@@ -286,6 +293,16 @@ workflows:
             flutter pub get
             dart pub global activate patrol_cli 4.8.0
             envman add --key PATH --value "$PATH:$HOME/.pub-cache/bin"   # keep the CLI on PATH for later steps
+            # `flutter create` only generates a unit test target
+            # (RunnerTests), never the UI test target ("RunnerUITests")
+            # Patrol's iOS runner requires -- without it, Patrol's own
+            # xctestrun patcher has nothing real to attach to and the run
+            # fails with "Missing test product at (null)" (confirmed live,
+            # builds #173/#175). gem list -i xcodeproj >/dev/null 2>&1 ||
+            # xcodeproj ships with CocoaPods (already preinstalled on
+            # osx-xcode stacks), installed defensively in case that changes.
+            gem list -i xcodeproj >/dev/null 2>&1 || gem install xcodeproj --no-document
+            ruby tool/patrol_setup_ios.rb      # no-op if already applied
     - script@1.2.1:
         title: Pod install (if this Flutter version generated a Podfile)
         inputs:
@@ -323,29 +340,6 @@ workflows:
             set -o pipefail   # no -e: a failing suite must still leave us a log to convert
             export PATH="$PATH:$HOME/.pub-cache/bin"
             patrol test --device "Bitrise iOS default" --verbose 2>&1 | tee patrol-ios-build.log
-    - script@1.2.1:
-        title: Dump xctestrun for diagnosis (temporary)
-        is_always_run: true
-        inputs:
-        # Live runs keep hitting "Cannot test target RunnerUITests ...
-        # Missing test product at (null)" from Patrol's own
-        # `xcodebuild test-without-building` call (builds #173, #175),
-        # even after the build step that produces this .xctestrun reports
-        # success. Dump its actual RunnerUITests entry so the next
-        # iteration can fix the real cause instead of guessing -- remove
-        # this step once that's root-caused.
-        - working_dir: $BITRISE_SOURCE_DIR/apps/flutter
-        - content: |
-            XCTESTRUN="$(find build/ios_integ/Build/Products -maxdepth 1 -name '*.xctestrun' 2>/dev/null | head -1)"
-            if [ -n "$XCTESTRUN" ]; then
-              echo "=== $XCTESTRUN ==="
-              plutil -p "$XCTESTRUN"
-              echo "=== RunnerUITests.xctest contents (if built) ==="
-              find build/ios_integ/Build/Products -iname 'RunnerUITests*' 2>/dev/null
-            else
-              echo "No xctestrun found under build/ios_integ/Build/Products."
-              find build -maxdepth 4 -iname '*.xctestrun' -o -iname 'RunnerUITests*' 2>/dev/null
-            fi
     - script@1.2.1:
         title: Stop screen recording
         is_always_run: true
