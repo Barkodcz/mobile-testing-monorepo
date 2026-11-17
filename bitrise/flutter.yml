@@ -307,28 +307,8 @@ workflows:
         title: Boot simulator for Patrol
         inputs:
         - content: |
-            set -eo pipefail
             xcrun simctl boot "Bitrise iOS default" 2>/dev/null || true
             xcrun simctl bootstatus "Bitrise iOS default" -b
-            SIM_UDID="$(xcrun simctl list devices booted -j \
-              | python3 -c "import json,sys; d=json.load(sys.stdin)['devices']; print(next(x['udid'] for v in d.values() for x in v if x['name']=='Bitrise iOS default'))")"
-            envman add --key PATROL_SIM_UDID --value "$SIM_UDID"
-    - script@1.2.1:
-        title: Warm up Xcode's simulator destination cache
-        inputs:
-        # patrol_cli calls `xcodebuild test-without-building` with
-        # `-destination-timeout 1` -- a 1-second budget for xcodebuild to
-        # resolve the booted device. On a fresh CI run Xcode's own device
-        # cache hasn't necessarily caught up with a plain `simctl boot` yet,
-        # and resolving too slowly makes xcodebuild fall back to a null
-        # destination ("Missing test product at (null)", confirmed live,
-        # build #173). Force one destination resolution ourselves first
-        # (no timeout pressure here) so it's already cached by the time
-        # Patrol's own call runs.
-        - working_dir: $BITRISE_SOURCE_DIR/apps/flutter/ios
-        - content: |
-            xcodebuild -showdestinations -workspace Runner.xcworkspace -scheme Runner \
-              -destination "platform=iOS Simulator,id=$PATROL_SIM_UDID" 2>&1 | tail -20 || true
     - script@1.2.1:
         title: Start screen recording
         inputs:
@@ -343,6 +323,29 @@ workflows:
             set -o pipefail   # no -e: a failing suite must still leave us a log to convert
             export PATH="$PATH:$HOME/.pub-cache/bin"
             patrol test --device "Bitrise iOS default" --verbose 2>&1 | tee patrol-ios-build.log
+    - script@1.2.1:
+        title: Dump xctestrun for diagnosis (temporary)
+        is_always_run: true
+        inputs:
+        # Live runs keep hitting "Cannot test target RunnerUITests ...
+        # Missing test product at (null)" from Patrol's own
+        # `xcodebuild test-without-building` call (builds #173, #175),
+        # even after the build step that produces this .xctestrun reports
+        # success. Dump its actual RunnerUITests entry so the next
+        # iteration can fix the real cause instead of guessing -- remove
+        # this step once that's root-caused.
+        - working_dir: $BITRISE_SOURCE_DIR/apps/flutter
+        - content: |
+            XCTESTRUN="$(find build/ios_integ/Build/Products -maxdepth 1 -name '*.xctestrun' 2>/dev/null | head -1)"
+            if [ -n "$XCTESTRUN" ]; then
+              echo "=== $XCTESTRUN ==="
+              plutil -p "$XCTESTRUN"
+              echo "=== RunnerUITests.xctest contents (if built) ==="
+              find build/ios_integ/Build/Products -iname 'RunnerUITests*' 2>/dev/null
+            else
+              echo "No xctestrun found under build/ios_integ/Build/Products."
+              find build -maxdepth 4 -iname '*.xctestrun' -o -iname 'RunnerUITests*' 2>/dev/null
+            fi
     - script@1.2.1:
         title: Stop screen recording
         is_always_run: true
