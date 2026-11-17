@@ -9,6 +9,8 @@ pipelines:
         depends_on: [flutter_tests]
       flutter_patrol_android:
         depends_on: [flutter_tests]
+      flutter_patrol_ios:
+        depends_on: [flutter_tests]
     triggers:
       push:
       - branch: main
@@ -261,40 +263,33 @@ workflows:
       Patrol tests (Flutter + native interactions) on an iOS Simulator --
       same counter_patrol_test.dart as flutter_patrol_android, run through
       Patrol's XCUITest-based iOS runner instead of its Android/Gradle one.
-      Manual-trigger only (not added to the `flutter` pipeline) to avoid
-      adding macOS minutes to every push; start it from the Bitrise UI.
+      In the `flutter` pipeline alongside flutter_patrol_android, so it runs
+      on every push/PR touching apps/flutter/**, not just manually.
       tool/patrol_setup_ios.rb adds the native "RunnerUITests" XCUITest
       target Patrol's iOS runner requires (flutter create only generates a
-      unit test target, never a UI test target) -- without it, Patrol's own
-      xctestrun patcher has nothing real to attach to and the run fails with
-      "Missing test product at (null)" (hit live on builds #173/#175). Its
-      one source file, RunnerUITests.m, is Patrol's own required native
-      glue verbatim from its example app (github.com/leancodepl/patrol
-      packages/patrol/example/ios/RunnerUITests) -- an earlier placeholder
-      Swift file got the native plumbing green (build #179) without ever
-      exercising the real Dart test (Patrol reported "Total: 0"). That file's
-      `@import patrol;` also needs RunnerUITests linked against the
-      FlutterGeneratedPluginSwiftPackage local SPM package `flutter pub get`
-      generates (Flutter only keeps Runner's link to it in sync
-      automatically, never a hand-added target like this one) -- without
-      it the build fails with "Module 'patrol' not found" (hit live on
-      build #181); the setup script now adds that target's own
-      packageProductDependency + Frameworks-phase build file, mirroring
-      Patrol's own example project exactly. Confirmed live on build #183:
-      both counter_patrol_test.dart cases (home-screen value persistence,
-      notification shade) actually run and pass natively (Total: 2,
-      Successful: 2), and the session video attaches to a synthetic
-      zz_session_recording test case. One gap found on that same build:
-      unlike Android (adb-pulled into patrol_test/screenshots), Patrol's
-      $.takeNativeScreenshot() on iOS attaches straight into the .xcresult
-      via XCTest's own attachment API, so patrol_test/screenshots stayed
-      empty -- fixed by exporting those attachments with `xcrun
-      xcresulttool export attachments` and dropping them into the same
-      <classname>/<name>/<label>.<ext> layout Android uses, reusing the
-      existing attach-to-JUnit loop unchanged. That export step is the one
-      piece not yet re-verified live (the manifest.json schema it parses
-      is Apple's documented format, confirmed via `--schema`, but hasn't
-      been seen against a real screenshot attachment yet).
+      unit test target, never a UI test target), its real native glue
+      (RunnerUITests.m with the PATROL_INTEGRATION_TEST_IOS_RUNNER macro,
+      copied verbatim from Patrol's own example app:
+      github.com/leancodepl/patrol packages/patrol/example/ios/RunnerUITests),
+      and that target's own link to the FlutterGeneratedPluginSwiftPackage
+      local SPM package (Flutter only keeps Runner's own link to it in
+      sync automatically, never a hand-added target like this one) --
+      without any one of these three pieces the native build fails
+      ("Missing test product at (null)", "Module 'patrol' not found", or a
+      green build that silently never runs the real Dart test). Confirmed
+      live end-to-end: both counter_patrol_test.dart cases run with real
+      native automation (tap, pressHome, openApp, openNotifications) and
+      pass (Total: 2, Successful: 2), and the session video attaches to a
+      synthetic zz_session_recording test case.
+      KNOWN GAP: screenshots ($.takeNativeScreenshot()) don't currently
+      attach on iOS -- unlike Android (adb-pulled into
+      patrol_test/screenshots), they'd need to land in the .xcresult via
+      XCTest's attachment API, and on live runs so far xcrun xcresulttool
+      export attachments finds none to export. The export code is in place
+      (per Apple's documented manifest.json schema) and is a no-op rather
+      than a failure, so this doesn't break the build -- it just means no
+      iOS screenshots show up yet. Treat this as a follow-up investigation
+      (possibly a Patrol version/config issue), not a CI config bug.
     meta:
       bitrise.io:
         stack: osx-xcode-27.2.x

@@ -66,6 +66,7 @@ and "Video" describe the Tests-tab result, not whether a recording script exists
 | `flutter_record_goldens` | Flutter | golden (record mode) | JVM, no device | no | no | manual |
 | `flutter_integration_tests` | Flutter | `integration_test` | emulator (local VM) | no | yes | push/PR (`flutter`) |
 | `flutter_patrol_android` | Flutter | Patrol | emulator (local VM) | no | yes (+ native screenshots) | push/PR (`flutter`) |
+| `flutter_patrol_ios` | Flutter | Patrol (XCUITest-based runner) | simulator (local VM) | no | yes (screenshots not yet attaching, see guide §7.19) | push/PR (`flutter`) |
 | `maestro_android` | (Android app) | Maestro | emulator (local VM) | no | yes | push/PR (`maestro`) |
 | `appium_browserstack` | (Android app) | Appium + pytest | BrowserStack (real device) | no | yes | push on main (`appium`), **needs `BROWSERSTACK_USERNAME`/`BROWSERSTACK_ACCESS_KEY`** |
 | `android-appium-local` | (Android app) | Appium + pytest | emulator (local VM) | no | yes | manual |

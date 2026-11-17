@@ -384,13 +384,20 @@ scan` instead of raw `xcodebuild`).
 | `flutter_record_goldens` | **Manual only.** Records new golden baselines | manual, not wired into any pipeline | — | — |
 | `flutter_integration_tests` | `integration_test` package on a real emulator, `depends_on: [flutter_tests]` | same | generic | suite-level video + final-state screenshot, same mechanism as `android_ui_tests` |
 | `flutter_patrol_android` | Patrol (Flutter + native interactions), `depends_on: [flutter_tests]` | same | generic | **per-test** native screenshots (Patrol's own `$.takeNativeScreenshot()` calls) **plus** suite-level video |
+| `flutter_patrol_ios` | Same Patrol suite (`counter_patrol_test.dart`), run through Patrol's XCUITest-based iOS runner instead of Android/Gradle, `depends_on: [flutter_tests]` | same | generic (fastlane's `trainer` converts the `.xcresult` to JUnit) | suite-level video (same `simctl`-recording mechanism as `ios_ui_tests`) attached to a synthetic `zz_session_recording` testcase; **screenshots do not currently attach** (see below) |
 
-**Patrol has the richest screenshots in this repo**: because Patrol itself knows which test
-it's running when it saves a screenshot, the folder layout it produces —
+**Patrol has the richest screenshots in this repo on Android**: because Patrol itself knows
+which test it's running when it saves a screenshot, the folder layout it produces —
 `patrol_test/screenshots/<classname>/<name>/<timestamp>_<label>.png` — already encodes the
 exact classname/name needed, no guessing required (unlike the synthetic-testcase approach
 needed for `integration_test` and Android UI tests, which have no native per-test screenshot
-API).
+API). **On iOS this isn't the case**: `$.takeNativeScreenshot()` calls never populate
+`patrol_test/screenshots` there (confirmed live) — if Patrol attaches screenshots into the
+`.xcresult` via XCTest's own attachment API the way XCUITest normally does, `xcrun
+xcresulttool export attachments` should export them (the workflow already runs this and
+would attach anything it finds, same `<classname>/<name>/<label>.<ext>` convention as
+Android), but on every live run so far it's found nothing to export. Treat this as an open
+Patrol-iOS investigation, not a bug in this repo's CI config.
 
 **Setup pieces to copy into a new project:**
 - `pubspec.yaml`: `patrol: ^4.10.0` + a `patrol:` config block with `app_name`,
@@ -403,6 +410,56 @@ API).
   the script the moment `flutter test`'s piped exit code is non-zero, before `tojunit` ever
   gets to convert the JSON, so a failing suite silently produces *no* JUnit XML at all. Use
   `set -o pipefail` alone (no `-e`) for that specific line.
+
+**Flutter Patrol on iOS needs three pieces of native setup that `flutter create` doesn't
+provide, all handled by `apps/flutter/tool/patrol_setup_ios.rb` (run once per CI checkout,
+no-op if already applied — same idempotent pattern as `tool/patrol_setup_android.py`):**
+1. **A native "RunnerUITests" XCUITest target.** `flutter create` only generates a unit-test
+   target (`RunnerTests`), never a UI-test target. Without one, Patrol's own `xctestrun`
+   PlistBuddy patch has nothing real to attach to, and the run fails with `Cannot test target
+   "RunnerUITests" ... Missing test product at (null)`. The script creates the target with
+   the [`xcodeproj`](https://github.com/CocoaPods/Xcodeproj) Ruby gem (already available on
+   `osx-xcode-*` stacks as a CocoaPods dependency) and writes the `TargetAttributes.TestTargetID`
+   attribute Xcode itself writes when you add a UI Testing Bundle target via File > New >
+   Target and pick "Runner" under "Target to be Tested" — that attribute, not just the
+   `TEST_TARGET_NAME` build setting, is what makes `xcodebuild` populate `TestBundlePath`/
+   `TestHostPath` in the produced `.xctestrun`.
+2. **The exact native glue Patrol's docs require**, copied verbatim from Patrol's own example
+   app (`github.com/leancodepl/patrol` `packages/patrol/example/ios/RunnerUITests`):
+   ```objectivec
+   @import XCTest;
+   @import patrol;
+   @import ObjectiveC.runtime;
+
+   PATROL_INTEGRATION_TEST_IOS_RUNNER(RunnerUITests)
+   ```
+   This must be **Objective-C**, not Swift — the macro that bridges to Patrol's
+   `AutomatorServer` and the Dart-defined tests is a C preprocessor macro, and an earlier
+   attempt with an empty Swift placeholder class got the native plumbing green (the build
+   and run succeeded) without ever invoking the real Dart test at all — Patrol's own summary
+   silently reported `Total: 0` tests.
+3. **Linking that new target against `FlutterGeneratedPluginSwiftPackage`.** `@import patrol;`
+   above resolves through this local Swift package (`flutter pub get` generates it; it
+   aggregates every plugin's native code, including the `patrol` plugin's). Flutter's own
+   build tooling keeps the `Runner` target's link to it in sync automatically on every build,
+   but has no awareness of a hand-added target like `RunnerUITests`, so it's never linked
+   there — without it, the build fails with `Module 'patrol' not found`. Fixed by giving
+   `RunnerUITests` its own `XCSwiftPackageProductDependency` + `Frameworks`-build-phase
+   `PBXBuildFile`, mirroring exactly what's committed in Patrol's own example `.pbxproj` (two
+   independent product-dependency objects with the same `productName`, one per target).
+
+All three were root-caused by actually rebuilding the identical project locally on a matching
+Xcode 27.2 install (not guessed from logs alone) — see the script's own comments for the
+exact live-build error each one fixes.
+
+Two more iOS-Patrol-specific setup notes, both already baked into the workflow:
+- **No `Podfile` means no `cocoapods-install` step.** Flutter 3.24+ defaults new iOS projects
+  to Swift Package Manager and only emits a `Podfile` if a plugin actually needs CocoaPods —
+  this toy app has none. Running `cocoapods-install@3.1.1` unconditionally hard-fails with
+  `No Podfile found`; run `pod install` only when `ios/Podfile` actually exists.
+- **`patrol test`'s own `xcodebuild test-without-building` call uses `-only-testing
+  RunnerUITests/RunnerUITests`**, so the native glue file's class name must be exactly
+  `RunnerUITests` (matching the macro's argument) for that filter to match anything.
 
 ### 6.5 Cross-platform E2E: Maestro
 
@@ -629,6 +686,48 @@ and as a "things that will probably bite you too" list for a new project:
     auto-provisioned the moment the Virtual Device Testing add-on is enabled — no separate
     credential needed. **Lesson: check a Step's actual input defaults before assuming it needs
     an external credential.**
+15. **`cocoapods-install` hard-fails on a Flutter project with no CocoaPods dependencies.**
+    Flutter 3.24+ defaults new iOS projects to Swift Package Manager and only emits a
+    `Podfile` if a plugin actually needs CocoaPods — `flutter_patrol_ios`'s toy app has none,
+    so the Step errored with `No Podfile found`. **Fixed** by running `pod install` only when
+    `ios/Podfile` actually exists, instead of the unconditional Step.
+16. **Patrol's iOS runner needs a native "RunnerUITests" XCUITest target that `flutter
+    create` never generates** (it only generates a unit-test target, `RunnerTests`). Without
+    one, Patrol's own `xctestrun` PlistBuddy patch has nothing real to attach to and the run
+    fails with `Cannot test target "RunnerUITests" ... Missing test product at (null)`.
+    **Fixed** by `apps/flutter/tool/patrol_setup_ios.rb`, which creates the target
+    programmatically with the `xcodeproj` Ruby gem and writes the `TargetAttributes.TestTargetID`
+    attribute Xcode itself writes for "Target to be Tested" (not just the `TEST_TARGET_NAME`
+    build setting) — confirmed by root-causing it against a real rebuild of the identical
+    project on a matching Xcode 27.2 install, not guessed from logs alone.
+17. **A green native build that silently never ran the real test.** The first working version
+    of the `RunnerUITests` target above used an empty placeholder Swift `XCTestCase` just to
+    get the target compiling — the build and run both succeeded, but Patrol's own summary
+    quietly reported `Total: 0` tests, because nothing in that file actually bridged to
+    Patrol's automation. **Fixed** by replacing it with Patrol's actual required native glue,
+    copied verbatim from its own example app (`github.com/leancodepl/patrol`
+    `packages/patrol/example/ios/RunnerUITests`) — Objective-C, not Swift, built around the
+    `PATROL_INTEGRATION_TEST_IOS_RUNNER(RunnerUITests)` macro. **Lesson: "the build succeeded"
+    and "the test actually ran" are different claims — check the test count, not just the
+    exit code.**
+18. **`Module 'patrol' not found` compiling the real native glue from #17.** `@import patrol;`
+    resolves through the `FlutterGeneratedPluginSwiftPackage` local SPM package (`flutter pub
+    get` generates it, aggregating every plugin's native code). Flutter's own build tooling
+    keeps the `Runner` target's link to it in sync automatically, but has no awareness of a
+    hand-added target like `RunnerUITests`, so it's never linked there. **Fixed** by giving
+    `RunnerUITests` its own `XCSwiftPackageProductDependency` + `Frameworks`-build-phase
+    `PBXBuildFile` for the same package — confirmed correct by diffing Patrol's own example
+    `.pbxproj`, which wires it exactly the same way (two independent product-dependency
+    objects with the same `productName`, one per target).
+19. **Patrol's iOS screenshots don't land where Android's do.** `$.takeNativeScreenshot()`
+    never populates `patrol_test/screenshots` on iOS the way it does on Android (adb pull).
+    Added an `xcrun xcresulttool export attachments` step on the theory that iOS attaches
+    screenshots into the `.xcresult` via XCTest's own attachment API instead — but on every
+    live run so far, it finds no attachments to export. **Status: open.** The export code is
+    harmless (a no-op, not a failure) and stays in place per Apple's documented
+    `manifest.json` schema, but whether/how Patrol actually produces iOS screenshots needs
+    further investigation — don't assume this is fixed just because the export step runs
+    cleanly.
 
 ---
 
@@ -721,6 +820,8 @@ A condensed playbook, in the order that minimizes wasted work:
 | `appium-uiautomator2-driver` | 3.7.0 |
 | `patrol` (pubspec) | ^4.10.0 |
 | `patrol_cli` | 4.8.0 |
+| `xcodeproj` (gem, iOS Patrol setup) | 1.28.1 |
+| `fastlane` (gem, iOS Patrol JUnit conversion) | ~> 2.223 |
 
 ### Every workflow at a glance (this repo, latest state)
 
@@ -746,6 +847,7 @@ A condensed playbook, in the order that minimizes wasted work:
 | `flutter_record_goldens` | Flutter | manual | by design |
 | `flutter_integration_tests` | Flutter | push/PR | ✅ passing |
 | `flutter_patrol_android` | Flutter | push/PR | ✅ passing |
+| `flutter_patrol_ios` | Flutter | push/PR | ✅ passing (test execution + video; screenshots not yet attaching, see §7 item 19) |
 | `maestro_android` | E2E | push/PR | ✅ passing |
 | `android_maestro_sharded` (pipeline) | E2E | manual | ✅ passing |
 | `appium_browserstack` | E2E | push (main) | ❌ blocked — missing secrets |
