@@ -3,9 +3,7 @@
 # requires -- `flutter create` only generates a unit test target
 # ("RunnerTests"), never a UI test target, so Patrol's own xctestrun patcher
 # has nothing real to attach to and the run fails with "Missing test product
-# at (null)". The target + its one source file mirror Patrol's own example
-# app's native setup (github.com/leancodepl/patrol packages/patrol/example).
-# Safe to run many times: no-op if the target already exists.
+# at (null)". Safe to run many times: no-op if the target already exists.
 # Usage (from apps/flutter): ruby tool/patrol_setup_ios.rb
 
 require 'xcodeproj'
@@ -67,6 +65,32 @@ group = project.main_group.find_subpath(TARGET_NAME, true)
 group.set_source_tree('<group>')
 file_ref = group.new_reference(src_file)
 ui_test_target.add_file_references([file_ref])
+
+# `@import patrol;` above resolves through FlutterGeneratedPluginSwiftPackage
+# -- the local SPM package `flutter pub get` already generated (it
+# aggregates every plugin's native code, including the `patrol` plugin's).
+# Flutter's own build tooling keeps Runner's link to it in sync automatically,
+# but has no awareness of this extra RunnerUITests target, so it never
+# links there -- without this, `@import patrol` fails to compile with
+# "Module 'patrol' not found" (confirmed live). Patrol's own example app
+# wires this exact same way: two independent product-dependency objects
+# with the same productName, one per target (verified against
+# github.com/leancodepl/patrol packages/patrol/example/ios/Runner.xcodeproj).
+plugin_package_name = runner_target.package_product_dependencies
+                                    .map(&:product_name)
+                                    .find { |n| n == 'FlutterGeneratedPluginSwiftPackage' }
+if plugin_package_name
+  product_dep = project.new(Xcodeproj::Project::Object::XCSwiftPackageProductDependency)
+  product_dep.product_name = plugin_package_name
+  ui_test_target.package_product_dependencies << product_dep
+
+  build_file = project.new(Xcodeproj::Project::Object::PBXBuildFile)
+  build_file.product_ref = product_dep
+  ui_test_target.frameworks_build_phase.files << build_file
+else
+  warn "Runner has no FlutterGeneratedPluginSwiftPackage dependency yet (run " \
+       "`flutter pub get` first) -- RunnerUITests won't be able to `@import patrol`."
+end
 
 ui_test_target.build_configurations.each do |config|
   config.build_settings['PRODUCT_NAME'] = '$(TARGET_NAME)'

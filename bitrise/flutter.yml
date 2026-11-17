@@ -272,12 +272,21 @@ workflows:
       glue verbatim from its example app (github.com/leancodepl/patrol
       packages/patrol/example/ios/RunnerUITests) -- an earlier placeholder
       Swift file got the native plumbing green (build #179) without ever
-      exercising the real Dart test (Patrol reported "Total: 0"); this is
-      the actual fix. JUnit conversion and the screenshot/video attachment
-      paths below are still best-effort from Patrol's documented Android
-      behavior and this repo's existing iOS conventions -- expect to adjust
-      the "Collect Patrol results" step once you see Patrol's actual iOS
-      output layout on a real build with a passing Dart test.
+      exercising the real Dart test (Patrol reported "Total: 0"). That file's
+      `@import patrol;` also needs RunnerUITests linked against the
+      FlutterGeneratedPluginSwiftPackage local SPM package `flutter pub get`
+      generates (Flutter only keeps Runner's link to it in sync
+      automatically, never a hand-added target like this one) -- without
+      it the build fails with "Module 'patrol' not found" (hit live on
+      build #181); the setup script now adds that target's own
+      packageProductDependency + Frameworks-phase build file, mirroring
+      Patrol's own example project exactly. Verified locally end-to-end on
+      Xcode 27.2 with the exact xcodebuild invocation (flags included)
+      `patrol test` itself uses. JUnit conversion and the screenshot/video
+      attachment paths below are still best-effort from Patrol's documented
+      Android behavior and this repo's existing iOS conventions -- expect
+      to adjust the "Collect Patrol results" step once you see Patrol's
+      actual iOS output layout on a real build with a passing Dart test.
     meta:
       bitrise.io:
         stack: osx-xcode-27.2.x
