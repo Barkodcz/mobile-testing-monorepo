@@ -9,6 +9,7 @@ pipelines:
     workflows:
       emulator_repro_baseline: {}
       emulator_repro_no_hw_decoder: {}
+      emulator_repro_relaunch_regression: {}
 
 workflows:
   emulator_repro_baseline:
@@ -34,6 +35,28 @@ workflows:
     - EMULATOR_GPU: guest
     - EMULATOR_EXTRA_FLAGS: "-feature -HardwareDecoder"
     - REPRO_VARIANT: no-hw-decoder
+    after_run:
+    - _emulator_repro
+
+  emulator_repro_relaunch_regression:
+    summary: >
+      Emulator repro variant testing a specific hypothesis found by diffing
+      against the customer's real bitrise.yml/log: the customer's own
+      relaunch command falls back to "-gpu swiftshader_indirect" (a
+      host-side renderer) with no extra flags, which only happens if
+      EMULATOR_GPU/EMULATOR_EXTRA_FLAGS are out of scope at relaunch time --
+      suggesting their "clean up leftover emulator state before relaunching"
+      step drops those vars, silently discarding their own guest-mode /
+      -feature -HardwareDecoder mitigations on every retry.
+    meta:
+      bitrise.io:
+        stack: linux-docker-android-22.04
+        machine_type_id: g2.linux.x-large
+    envs:
+    - EMULATOR_GPU: guest
+    - EMULATOR_EXTRA_FLAGS: "-feature -HardwareDecoder"
+    - REPRO_VARIANT: relaunch-regression
+    - SIMULATE_RELAUNCH_GPU_RESET: "true"
     after_run:
     - _emulator_repro
 

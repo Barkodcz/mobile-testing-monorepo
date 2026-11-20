@@ -13,12 +13,23 @@ EMULATOR_EXTRA_FLAGS="${EMULATOR_EXTRA_FLAGS:-}"
 MAX_RETRIES="${MAX_RETRIES:-2}"
 REPORT_DIR="${REPORT_DIR:-$BITRISE_DEPLOY_DIR/maestro-repro}"
 DEVICE="emulator-5554"
+# When true, drops EMULATOR_GPU/EMULATOR_EXTRA_FLAGS right before relaunching,
+# the same way the customer's relaunch log shows -- their relaunch command's
+# own fallback defaults (${EMULATOR_GPU:-swiftshader_indirect}) only matter if
+# those vars are actually out of scope at that point, which their "clean up
+# leftover emulator state before relaunching" commit suggests is happening.
+SIMULATE_RELAUNCH_GPU_RESET="${SIMULATE_RELAUNCH_GPU_RESET:-false}"
+
+# The emulator GNSS HAL can hang (watchdog kills system_server mid-run), so
+# supply the position via a test provider -- matches the customer's env.
+export GEO_FIX="${GEO_FIX:-mock}"
 
 mkdir -p "$REPORT_DIR"
 
 echo "=== Effective emulator flags ==="
 echo "EMULATOR_GPU=$EMULATOR_GPU"
 echo "EMULATOR_EXTRA_FLAGS=$EMULATOR_EXTRA_FLAGS"
+echo "GEO_FIX=$GEO_FIX"
 echo "APK_PATH=$APK_PATH"
 echo "FLOW_DIR=$FLOW_DIR"
 echo "================================"
@@ -39,10 +50,26 @@ relaunch_emulator() {
   local emu
   emu="$(command -v emulator || echo "$ANDROID_HOME/emulator/emulator")"
 
+  if [ "$SIMULATE_RELAUNCH_GPU_RESET" = "true" ]; then
+    echo "Simulating the customer's relaunch env reset: unsetting EMULATOR_GPU/EMULATOR_EXTRA_FLAGS before relaunch"
+    unset EMULATOR_GPU EMULATOR_EXTRA_FLAGS
+  fi
+
+  # Matches the customer's run_android_ci.sh relaunch line exactly, including
+  # its own fallback defaults -- if EMULATOR_GPU/EMULATOR_EXTRA_FLAGS aren't
+  # in scope at this point, the relaunch silently falls back to
+  # swiftshader_indirect (host-side SwiftShader) instead of the guest
+  # rendering the first launch used, and drops any extra flags (e.g.
+  # -feature -HardwareDecoder) from the retry.
   # shellcheck disable=SC2086
   nohup "$emu" "@$EMULATOR_AVD" -verbose -no-window -no-audio -no-snapshot -no-boot-anim \
-    -gpu "$EMULATOR_GPU" $EMULATOR_EXTRA_FLAGS -memory 4096 -camera-back none -camera-front none \
+    -gpu "${EMULATOR_GPU:-swiftshader_indirect}" ${EMULATOR_EXTRA_FLAGS:-} -memory 4096 -camera-back none -camera-front none \
     >> "$REPORT_DIR/emulator-restart.log" 2>&1 &
+
+  # Restore so the rest of the script (flag printing, later relaunches without
+  # the reset) still reflects the workflow's configured values.
+  EMULATOR_GPU="${EMULATOR_GPU:-guest}"
+  EMULATOR_EXTRA_FLAGS="${EMULATOR_EXTRA_FLAGS:-}"
 
   echo "Waiting for device..."
   timeout 300 adb wait-for-device

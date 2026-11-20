@@ -28,12 +28,20 @@ for f in memory.max memory.peak memory.events; do
     echo "$f: not found"
   fi
 done
+# cgroup v1 fallback -- matches the customer's diagnostics step, which checks
+# both hierarchies since it doesn't assume which one the stack uses.
+for f in /sys/fs/cgroup/memory/memory.limit_in_bytes /sys/fs/cgroup/memory/memory.max_usage_in_bytes /sys/fs/cgroup/memory/memory.oom_control; do
+  if [ -r "$f" ]; then
+    echo "--- $f ---"
+    cat "$f"
+  fi
+done
 
 echo "=== qemu process ==="
 pgrep -af qemu 2>/dev/null || echo "no qemu process (emulator is gone)"
 
 echo "=== dmesg: OOM ==="
-dmesg 2>/dev/null | grep -iE "oom" | tail -20 || echo "dmesg not readable / no OOM lines"
+dmesg 2>/dev/null | grep -iE "out of memory|oom|killed process" | tail -20 || echo "dmesg not readable / no OOM lines"
 
 echo "=== /tmp/android-*/ crash artifacts ==="
 shopt -s nullglob
@@ -43,9 +51,10 @@ if [ ${#crash_dirs[@]} -eq 0 ]; then
 else
   for d in "${crash_dirs[@]}"; do
     echo "--- $d ---"
+    ls -la "$d" 2>/dev/null | head -20
     find "$d" -maxdepth 2 -type f \( -iname "*.dmp" -o -iname "*.txt" -o -iname "*.log" \) 2>/dev/null | while read -r f; do
       echo "## $f"
-      strings "$f" 2>/dev/null | grep -iE "signal|crash|abort|codec|decoder|h264|vulkan|swiftshader|qemu|\.so" | head -50
+      strings "$f" 2>/dev/null | grep -iE "signal|crash|abort|codec|decoder|h264|libGL|vulkan|swiftshader|qemu|emulator-|\.so" | head -50
     done
   done
 fi
