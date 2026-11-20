@@ -1,0 +1,105 @@
+# Emulator repro module: investigates a qemu segfault seen on the Linux
+# Docker android stack during long Maestro flows. Manual-trigger only,
+# isolated from the "modern" e2e.yml setup (avd-manager@2, maestro-test step)
+# so the two remain directly comparable.
+format_version: "13"
+
+pipelines:
+  emulator_crash_repro:
+    workflows:
+      emulator_repro_baseline: {}
+      emulator_repro_no_hw_decoder: {}
+
+workflows:
+  emulator_repro_baseline:
+    summary: Emulator repro, baseline emulator flags (guest GPU, no extra flags).
+    meta:
+      bitrise.io:
+        stack: linux-docker-android-22.04
+        machine_type_id: g2.linux.x-large
+    envs:
+    - EMULATOR_GPU: guest
+    - EMULATOR_EXTRA_FLAGS: ""
+    - REPRO_VARIANT: baseline
+    after_run:
+    - _emulator_repro
+
+  emulator_repro_no_hw_decoder:
+    summary: Emulator repro, host-side H.264 hardware decoder disabled.
+    meta:
+      bitrise.io:
+        stack: linux-docker-android-22.04
+        machine_type_id: g2.linux.x-large
+    envs:
+    - EMULATOR_GPU: guest
+    - EMULATOR_EXTRA_FLAGS: "-feature -HardwareDecoder"
+    - REPRO_VARIANT: no-hw-decoder
+    after_run:
+    - _emulator_repro
+
+  _emulator_repro:
+    summary: >
+      Shared utility workflow for the emulator_crash_repro pipeline. Not meant
+      to be started directly -- envs come from the wrapper workflow that
+      after_runs this one.
+    steps:
+    - git-clone@8.5.2: {}
+    - set-java-version@1:
+        inputs:
+        - set_java_version: "17"
+    - android-build@1.2.0:
+        inputs:
+        - project_location: $BITRISE_SOURCE_DIR/apps/android
+        - module: app
+        - variant: debug
+    - avd-manager@1:
+        inputs:
+        - api_level: "34"
+        - abi: x86_64
+        - profile: pixel_6
+        - tag: google_apis
+        - emulator_id: emulator-5554
+        - create_command_flags: "--sdcard 2048M"
+        - start_command_flags: "-gpu $EMULATOR_GPU $EMULATOR_EXTRA_FLAGS -memory 4096 -no-snapshot -no-boot-anim -no-audio -camera-back none -camera-front none"
+    - wait-for-android-emulator@1: {}
+    - script@1.2.1:
+        title: Install Maestro 2.12.1
+        inputs:
+        - content: |
+            set -euo pipefail
+            curl -fsSL -o /tmp/maestro.zip \
+              https://github.com/mobile-dev-inc/maestro/releases/download/cli-2.12.1/maestro.zip
+            echo "54dbb0716425626604973cbb374c585ca30272375d9ce15177a1152765ddd9d7  /tmp/maestro.zip" | sha256sum -c -
+            unzip -q /tmp/maestro.zip -d "$HOME"
+            envman add --key PATH --value "$HOME/maestro/bin:$PATH"
+            "$HOME/maestro/bin/maestro" --version
+    - script@1.2.1:
+        title: Run Maestro flows
+        inputs:
+        - content: bash "$BITRISE_SOURCE_DIR/scripts/repro/run_maestro_with_relaunch.sh"
+    - script@1.2.1:
+        title: Runner and emulator diagnostics
+        is_always_run: true
+        inputs:
+        - content: bash "$BITRISE_SOURCE_DIR/scripts/repro/diagnostics.sh"
+    - script@1.2.1:
+        title: Publish JUnit to Test Reports
+        is_always_run: true
+        inputs:
+        - content: |
+            set -uo pipefail
+            mkdir -p "$BITRISE_TEST_RESULT_DIR/maestro-repro"
+            cp "$BITRISE_DEPLOY_DIR/maestro-repro/junit.xml" "$BITRISE_TEST_RESULT_DIR/maestro-repro/junit.xml" 2>/dev/null || true
+            cat > "$BITRISE_TEST_RESULT_DIR/maestro-repro/test-info.json" <<EOF
+            {"test-name":"Emulator repro ($REPRO_VARIANT)"}
+            EOF
+    - deploy-to-bitrise-io@2.26.2:
+        is_always_run: true
+        inputs:
+        - deploy_path: $BITRISE_DEPLOY_DIR/emulator-crash
+        - is_compress: "true"
+    - deploy-to-bitrise-io@2.26.2:
+        is_always_run: true
+        inputs:
+        - deploy_path: $BITRISE_DEPLOY_DIR/maestro-repro
+        - is_compress: "true"

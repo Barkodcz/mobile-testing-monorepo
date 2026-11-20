@@ -1,0 +1,10 @@
+# Maestro workspace config for the emulator crash repro. The video flow runs
+# first, matching "the customer's crash always happens during the first,
+# long flow".
+flows:
+  - "*.yaml"
+executionOrder:
+  continueOnFailure: true
+  flowsOrder:
+    - video_playback
+    - counter_soak

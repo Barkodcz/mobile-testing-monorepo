@@ -1,0 +1,17 @@
+appId: io.bitrise.sample.counter
+---
+# Sustained ADB/UI traffic plus repeated pm clear, roughly approximating a
+# long login/checkout-style flow.
+- repeat:
+    times: 40
+    commands:
+      - launchApp:
+          clearState: true
+      - assertVisible: "Count: 0"
+      - tapOn:
+          id: "increment_button"
+      - tapOn:
+          id: "increment_button"
+      - assertVisible: "Count: 2"
+      - tapOn: "Reset"
+      - assertVisible: "Count: 0"

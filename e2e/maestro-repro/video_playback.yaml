@@ -1,0 +1,19 @@
+appId: com.android.chrome
+---
+- openLink: "https://storage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4"
+- tapOn:
+    text: "Use without an account|Accept & continue|No thanks|No, thanks|Got it"
+    optional: true
+- tapOn:
+    text: "Use without an account|Accept & continue|No thanks|No, thanks|Got it"
+    optional: true
+- takeScreenshot: video_playback_start
+# ~3 minutes of sustained playback / decoding load.
+- repeat:
+    times: 18
+    commands:
+      - extendedWaitUntil:
+          visible: "__never_present__"
+          timeout: 10000
+          optional: true
+- takeScreenshot: video_playback_end

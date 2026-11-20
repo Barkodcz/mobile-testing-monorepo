@@ -18,6 +18,7 @@ include:
 - path: bitrise/react-native.yml
 - path: bitrise/flutter.yml
 - path: bitrise/e2e.yml
+- path: bitrise/emulator-repro.yml
 
 app:
   envs:
