@@ -7,7 +7,12 @@ appId: io.bitrise.sample.counter
     commands:
       - launchApp:
           clearState: true
-      - assertVisible: "Count: 0"
+      # Right after the video flow the device can still be under load, so a
+      # cold start post-clearState can be slower than Maestro's default
+      # assertVisible timeout (~17s) -- give it more headroom here.
+      - assertVisible:
+          text: "Count: 0"
+          timeout: 30000
       - tapOn:
           id: "increment_button"
       - tapOn:
