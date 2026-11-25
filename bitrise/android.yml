@@ -41,8 +41,12 @@ workflows:
         inputs:
         - build_root_directory: $BITRISE_SOURCE_DIR/apps/android
         - gradle_task: ":app:verifyPaparazziDebug"
-        - app_file_include_filter: ""          # this task builds no APK/AAB -- nothing to export
-        - mapping_file_include_filter: ""
+        # This task builds no APK/AAB/mapping file -- the Step's default
+        # include filters just won't match anything, so nothing gets
+        # (re-)copied into the deploy dir. An empty-string override here
+        # fails with "AppFileIncludeFilter: required variable is not
+        # present" (confirmed live), so leave the defaults as-is rather
+        # than trying to explicitly suppress them.
     - script@1.2.1:
         title: Merge JUnit XML and keep diff images
         is_always_run: true
@@ -79,8 +83,8 @@ workflows:
         inputs:
         - build_root_directory: $BITRISE_SOURCE_DIR/apps/android
         - gradle_task: ":app:recordPaparazziDebug"
-        - app_file_include_filter: ""          # this task builds no APK/AAB -- nothing to export
-        - mapping_file_include_filter: ""
+        # Same note as android_snapshot_tests above -- no include-filter
+        # override, an empty string fails the Step's input validation.
     - script@1.2.1:
         title: Zip recorded snapshots
         inputs:
@@ -117,7 +121,8 @@ workflows:
         inputs:
         - build_root_directory: $BITRISE_SOURCE_DIR/apps/android
         - gradle_task: ":app:connectedDebugAndroidTest"
-        - app_file_include_filter: ""          # this task builds no new APK/AAB -- nothing to export
+        # Same note as android_snapshot_tests above -- no include-filter
+        # override, an empty string fails the Step's input validation.
     - script@1.2.1:
         title: Stop screen recording
         is_always_run: true

@@ -153,11 +153,12 @@ versions repo-wide).
    task (replaced a raw `./gradlew` script — see
    [`docs/BITRISE_CONCEPTS.md`](../docs/BITRISE_CONCEPTS.md) §6). Inputs:
    `build_root_directory: $BITRISE_SOURCE_DIR/apps/android`,
-   `gradle_task: ":app:verifyPaparazziDebug"`, and both
-   `app_file_include_filter`/`mapping_file_include_filter` set to `""` — this task builds no
-   APK/AAB/mapping file, so the Step's default copy-into-deploy-dir filters would otherwise
-   opportunistically (and pointlessly) pick up stale ones from a previous build on the same
-   machine.
+   `gradle_task: ":app:verifyPaparazziDebug"`. `app_file_include_filter`/
+   `mapping_file_include_filter` are left at their defaults — this task builds no APK/AAB/mapping
+   file, so nothing matches either filter anyway. (An earlier attempt overrode both to `""` to make
+   that explicit; the Step rejects an empty string with `"AppFileIncludeFilter: required variable
+   is not present"`, confirmed live, despite documenting both inputs as optional — so the defaults
+   are left as-is instead.)
    `verifyPaparazziDebug` is the Paparazzi Gradle plugin's verification task: it renders each
    `@Test`-annotated Compose snapshot off-device and diffs it against the committed golden image in
    `app/src/test/snapshots`, failing the task (and thus the step, since no `is_always_run`) if any diff
@@ -216,7 +217,8 @@ show no Paparazzi results even though step 4 ran fine).
 
 1. **`git-clone@8.5.2`**.
 2. **`gradle-runner@6.0.0`** — same official Step as §4.2 step 3, task
-   `:app:recordPaparazziDebug` this time, same `project_location`/empty include filters.
+   `:app:recordPaparazziDebug` this time, same `build_root_directory`, filters left at their
+   defaults (see §4.2 step 3's note on why not `""`).
    `recordPaparazziDebug` is Paparazzi's recording task — it (re)writes the reference/golden images
    instead of verifying against them.
 3. **`script@1.2.1`**, titled *"Zip recorded snapshots"*:
@@ -269,8 +271,9 @@ though it does mean every run re-downloads Gradle dependencies from scratch.
    process's PID to `/tmp/bitrise-android-recording.pid` so `stop-android.sh` can find and kill it
    later. The loop exists because Android's `screenrecord` self-terminates after ~180 seconds.
 6. **`gradle-runner@6.0.0`** — same official Step as §4.2 step 3 and §4.3 step 2, task
-   `:app:connectedDebugAndroidTest`, `app_file_include_filter: ""` (this task builds no new
-   APK/AAB). Runs the instrumented Compose UI test suite (`CounterScreenUiTest.kt`) against the
+   `:app:connectedDebugAndroidTest`, filters left at their defaults (this task builds no new
+   APK/AAB either, same reasoning as §4.2 step 3). Runs the instrumented Compose UI test suite
+   (`CounterScreenUiTest.kt`) against the
    emulator started in step 3. No `is_always_run`, so a test failure here will mark the
    step/workflow failed — but every step after this one is `is_always_run: true` so
    recording/results still get collected.

@@ -143,10 +143,12 @@ of how often each case actually applies here:
   (`android_snapshot_tests`'s `:app:verifyPaparazziDebug`, `android_record_snapshots`'s
   `:app:recordPaparazziDebug`, `android_ui_tests`'s `:app:connectedDebugAndroidTest`) now run via
   the official `gradle-runner@6.0.0` Step instead of a bare script — it runs "the specified Gradle
-  task" generically, so it's a drop-in replacement with no behavior change. (The
-  `app_file_include_filter`/`mapping_file_include_filter` inputs are set to `""` on all three,
-  since none of these tasks build an APK/AAB/mapping file worth exporting — leaving the Step's
-  defaults would opportunistically copy stale ones.)
+  task" generically, so it's a drop-in replacement with no behavior change. None of these tasks
+  build an APK/AAB/mapping file worth exporting, so the Step's `app_file_include_filter`/
+  `mapping_file_include_filter` inputs are left at their defaults rather than overridden to `""` —
+  an empty-string override fails that Step's own input validation (`"AppFileIncludeFilter: required
+  variable is not present"`, confirmed live) despite both inputs being documented optional. The
+  defaults just won't match anything for these tasks, so nothing gets copied either way.
 - **Evaluated and deliberately rejected — confirmed bug**: `xcode-build-for-simulator@3.0.3` exists
   and looks like the obvious replacement for the raw `xcodebuild build -sdk iphonesimulator …`
   scripts in `ios-maestro-e2e`, `ios-appium-local`, `ios-maestro-e2e-rn`, and `android-maestro-e2e-rn`'s
