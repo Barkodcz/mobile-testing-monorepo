@@ -42,6 +42,7 @@ secrets/env vars it needs (if any).
 
 ```yaml
 include:
+- path: bitrise/common.yml
 - path: bitrise/ios.yml
 - path: bitrise/android.yml
 - path: bitrise/react-native.yml
@@ -49,12 +50,16 @@ include:
 - path: bitrise/e2e.yml
 ```
 
-Each included file's `workflows:`/`pipelines:` sections merge into one global namespace (see
-[concepts §1](docs/BITRISE_CONCEPTS.md#1-workflows-vs-pipelines)) — workflow names must stay
-unique across all five files. Per-module docs:
+Each included file's `workflows:`/`pipelines:`/`step_bundles:` sections merge into one global
+namespace (see [concepts §1](docs/BITRISE_CONCEPTS.md#1-workflows-vs-pipelines)) — workflow and
+Step bundle names must stay unique across all six files. `bitrise/common.yml` carries no
+workflows/pipelines of its own — it's the home for every shared Step bundle (see [concepts
+§7](docs/BITRISE_CONCEPTS.md#7-step-bundles)), included first by convention since the other five
+files reference its bundles. Per-module docs:
 
 | Module | Platform | Doc |
 |---|---|---|
+| `bitrise/common.yml` | *(none — shared Step bundles only)* | [concepts §7](docs/BITRISE_CONCEPTS.md#7-step-bundles) |
 | `bitrise/ios.yml` | iOS (native SwiftUI) | [`bitrise/ios.md`](bitrise/ios.md) |
 | `bitrise/android.yml` | Android (native Jetpack Compose) | [`bitrise/android.md`](bitrise/android.md) |
 | `bitrise/react-native.yml` | React Native | [`bitrise/react-native.md`](bitrise/react-native.md) |

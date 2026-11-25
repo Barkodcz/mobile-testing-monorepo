@@ -1,0 +1,84 @@
+# Shared Step bundles used across every platform module, included first from
+# the root bitrise.yml. Every workflow in this repo that needs one of these
+# reuses the bundle instead of repeating the underlying Step(s) inline -- see
+# docs/BITRISE_CONCEPTS.md "Step bundles" for the full writeup of what each
+# one replaces, why it lives here instead of in one module, and which
+# repeated Step sequences were deliberately left *not* bundled.
+format_version: "13"
+
+step_bundles:
+  # Checkout. Used at the start of every workflow in every module (directly,
+  # or once via _ios_setup/_flutter_setup's before_run chain) -- 19 call
+  # sites as of this writing, all with identical (default) inputs. Bundling
+  # centralizes the version pin to one place.
+  git_clone:
+    steps:
+    - git-clone@8.5.2: {}
+
+  # Gradle dependency cache, restore/save pair. Can't be one bundle covering
+  # both halves -- `restore` runs right after checkout, `save` runs near the
+  # end of a workflow, with the actual build/test Steps in between, so they
+  # must stay as two separate bundle references at their respective call
+  # sites (same reasoning as android_avd_create below).
+  gradle_cache_restore:
+    steps:
+    - restore-gradle-cache@3.1.2: {}
+  gradle_cache_save:
+    steps:
+    - save-gradle-cache@1.6.2: {}
+
+  # npm dependency cache, restore/save pair -- same split-bundle reasoning as
+  # the Gradle pair above.
+  npm_cache_restore:
+    steps:
+    - restore-npm-cache@3.0.2: {}
+  npm_cache_save:
+    steps:
+    - save-npm-cache@1.2.1: {}
+
+  # Dart/Flutter dependency cache -- only the `save` half is bundled here.
+  # `restore-dart-cache@3.0.2` has exactly one call site in the whole repo
+  # (inside flutter.yml's shared `_flutter_setup` before_run workflow), so
+  # there's no actual duplication to remove by bundling it; `save-dart-cache`
+  # has 4 call sites (once per Flutter/Patrol workflow, since a before_run
+  # workflow can't run a step *after* the workflows that use it).
+  dart_cache_save:
+    steps:
+    - save-dart-cache@1.1.1: {}
+
+  # Just avd-manager, not also wait-for-android-emulator -- several
+  # workflows deliberately run other steps (building the APK, assigning a
+  # shard's flow files) *between* creating the AVD and waiting for it to
+  # finish booting, to overlap boot time with other work. Bundling the wait
+  # in too would force them adjacent and serialize that overlap away, so
+  # each call site still adds its own `wait-for-android-emulator@1.0.10: {}`
+  # wherever it already belonged.
+  android_avd_create:
+    inputs:
+    - avd_profile: pixel_6
+    - avd_api_level: "34"
+    - avd_tag: google_apis
+    - avd_abi: x86_64
+    steps:
+    - avd-manager@2.2.0:
+        inputs:
+        - profile: $avd_profile
+        - api_level: $avd_api_level
+        - tag: $avd_tag
+        - abi: $avd_abi
+
+  # Boot the shared "Bitrise iOS default" simulator and block until it's
+  # truly ready (simctl boot alone can return before boot actually
+  # completes). Used by every iOS workflow that launches the app directly
+  # (Maestro, Appium, Patrol) rather than through xcode-test's own harness --
+  # see docs/BITRISE_CONCEPTS.md for which iOS workflows deliberately do
+  # *not* use this bundle (the ones that combine booting with starting an
+  # external screen recording in one script).
+  ios_simulator_boot:
+    steps:
+    - script@1.2.1:
+        title: Boot simulator
+        inputs:
+        - content: |
+            xcrun simctl boot "Bitrise iOS default" 2>/dev/null || true
+            xcrun simctl bootstatus "Bitrise iOS default" -b

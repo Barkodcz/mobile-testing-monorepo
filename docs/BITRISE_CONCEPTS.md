@@ -185,9 +185,29 @@ inserted **anywhere** inside a workflow's step list, not just at the start — t
 usable here, since several of this repo's workflows need other Steps to run *between* the bundle's
 own steps and later ones.
 
-This repo defines two bundles in the root [`bitrise.yml`](../bitrise.yml) (shared across every
-included module, since both are used by workflows in more than one `bitrise/*.yml` file):
+This repo defines every Step bundle in [`bitrise/common.yml`](../bitrise/common.yml) — a dedicated,
+module-less file included first from the root [`bitrise.yml`](../bitrise.yml) (`include: [{path:
+bitrise/common.yml}, ...]`), rather than inside any one platform module, specifically because every
+bundle here is used by workflows in *more than one* `bitrise/*.yml` file. (Nothing stops a
+bundle from living inside a single module's own file if it were only ever used there — this repo
+just doesn't currently have one of those.)
 
+- **`git_clone`** — wraps `git-clone@8.5.2` with no inputs (every call site uses the Step's
+  defaults). Used at the start of essentially every workflow in the repo — 19 call sites — either
+  directly, or once via `_ios_setup`/`_flutter_setup`'s shared `before_run` chain. The win here is
+  purely centralizing the version pin to one place; there's no per-call-site input variation to
+  deduplicate.
+- **`gradle_cache_restore`** / **`gradle_cache_save`** — wrap `restore-gradle-cache@3.1.2` /
+  `save-gradle-cache@1.6.2` respectively (9 call sites each, across `android.yml`/`e2e.yml`). Kept
+  as **two** bundles, not one, for the same reason `android_avd_create` doesn't also wrap
+  `wait-for-android-emulator` (see below): `restore-*` runs right after checkout and `save-*` runs
+  near the end, with the actual build/test Steps for that workflow running in between.
+- **`npm_cache_restore`** / **`npm_cache_save`** — same pattern as the Gradle pair, for
+  `restore-npm-cache@3.0.2` / `save-npm-cache@1.2.1` (4 call sites each, `react-native.yml`).
+- **`dart_cache_save`** — wraps `save-dart-cache@1.1.1` (4 call sites, `flutter.yml`). No
+  `dart_cache_restore` counterpart: `restore-dart-cache@3.0.2` has exactly **one** call site in the
+  whole repo (inside `_flutter_setup`), so there's no actual duplication to remove by bundling it —
+  it was deliberately left as a bare Step.
 - **`android_avd_create`** — wraps just `avd-manager@2.2.0` (with `avd_profile`/`avd_api_level`/
   `avd_tag`/`avd_abi` inputs, defaulted to this repo's standard `pixel_6`/`"34"`/`google_apis`/
   `x86_64` emulator image). Deliberately does **not** also wrap `wait-for-android-emulator` — several
@@ -217,6 +237,19 @@ included module, since both are used by workflows in more than one `bitrise/*.ym
     decomposed, since splitting them risks a timing/behavior change in already-confirmed-working
     workflows for no real benefit (they don't share duplicated code with each other the way the two
     bundles above do).
+
+**Considered, not adopted**: `deploy-to-bitrise-io@2.26.2` (32 call sites, always the same version)
+and `wait-for-android-emulator@1.0.10` (10 call sites, always `{}`) were both evaluated as bundle
+candidates and rejected. `wait-for-android-emulator@1.0.10: {}` is already exactly as short as a
+`bundle::` reference would be — wrapping a single zero-input Step in a bundle adds a layer of
+indirection for zero line-count or dedup benefit. `deploy-to-bitrise-io` is riskier to wrap: nearly
+every call site sets `is_always_run: true` *on the step itself* (not an input), and a handful set
+`pipeline_intermediate_files` too; while `run_if` is confirmed to work when set on a `bundle::`
+reference (overriding the bundle definition's own default), this repo did not find a *confirmed*
+reference for `is_always_run` behaving identically on a bundle reference before deciding this was
+risky enough — given a silent regression here would mean build artifacts quietly stop being saved
+on a failing run, exactly the case you'd least notice until you needed the evidence, it was left as
+a plain Step at each call site rather than guess.
 
 Step bundle inputs can only be the ones declared in the bundle's own definition — you can't add a
 new ad hoc input at the call site (`bundle::android_avd_create: {}` uses every default; override

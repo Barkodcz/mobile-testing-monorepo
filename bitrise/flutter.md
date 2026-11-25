@@ -144,7 +144,7 @@ Manual-only helper, not in any pipeline.
 
 ### `flutter_integration_tests`
 
-1. **`bundle::android_avd_create`** — Step bundle (root [`bitrise.yml`](../bitrise.yml), see
+1. **`bundle::android_avd_create`** — Step bundle ([`bitrise/common.yml`](../bitrise/common.yml), see
    [`docs/BITRISE_CONCEPTS.md`](../docs/BITRISE_CONCEPTS.md) §7; previously an inline
    `avd-manager@2.2.0` here), with its default inputs: `avd_profile: pixel_6`,
    `avd_api_level: "34"`, `avd_tag: google_apis`, `avd_abi: x86_64`. Creates and boots an Android
@@ -354,7 +354,7 @@ three-item breakdown below.
    Flutter 3.24+ defaults new iOS projects to Swift Package Manager and only emits a `Podfile` if
    a plugin actually needs CocoaPods — this app has none, so `cocoapods-install@3.1.1` (the native
    Step) would hard-fail with `No Podfile found`; this conditional script replaces it.
-3. **`bundle::ios_simulator_boot`** — Step bundle (root [`bitrise.yml`](../bitrise.yml), see
+3. **`bundle::ios_simulator_boot`** — Step bundle ([`bitrise/common.yml`](../bitrise/common.yml), see
    [`docs/BITRISE_CONCEPTS.md`](../docs/BITRISE_CONCEPTS.md) §7; previously an inline
    `script@1.2.1` here): `xcrun simctl boot "Bitrise iOS default"` (tolerating "already booted"),
    then `xcrun simctl bootstatus "Bitrise iOS default" -b` to actually block until SpringBoard is

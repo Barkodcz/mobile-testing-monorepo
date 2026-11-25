@@ -24,7 +24,7 @@ pipelines:
 workflows:
   _flutter_setup:
     steps:
-    - git-clone@8.5.2: {}
+    - bundle::git_clone: {}
     - flutter-installer@1.1.1:
         inputs:
         - version: stable
@@ -67,7 +67,7 @@ workflows:
         - test_name: Flutter tests
         - base_path: $BITRISE_SOURCE_DIR/apps/flutter/test-results
         - search_pattern: "*/flutter.xml"
-    - save-dart-cache@1.1.1: {}
+    - bundle::dart_cache_save: {}
     - deploy-to-bitrise-io@2.26.2:
         is_always_run: true
 
@@ -155,7 +155,7 @@ workflows:
         - test_name: Flutter integration tests
         - base_path: $BITRISE_SOURCE_DIR/apps/flutter/test-results
         - search_pattern: "*/integration.xml"
-    - save-dart-cache@1.1.1: {}
+    - bundle::dart_cache_save: {}
     - deploy-to-bitrise-io@2.26.2:
         is_always_run: true
 
@@ -244,7 +244,7 @@ workflows:
         - test_name: Patrol (Android)
         - base_path: $BITRISE_SOURCE_DIR/apps/flutter/test-results
         - search_pattern: "*/patrol.xml"
-    - save-dart-cache@1.1.1: {}
+    - bundle::dart_cache_save: {}
     - deploy-to-bitrise-io@2.26.2:
         is_always_run: true
 
@@ -425,6 +425,6 @@ workflows:
         - test_name: Patrol (iOS)
         - base_path: $BITRISE_SOURCE_DIR/apps/flutter/test-results
         - search_pattern: "*/patrol-ios.xml"
-    - save-dart-cache@1.1.1: {}
+    - bundle::dart_cache_save: {}
     - deploy-to-bitrise-io@2.26.2:
         is_always_run: true

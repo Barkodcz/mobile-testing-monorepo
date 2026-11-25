@@ -47,7 +47,7 @@ workflows:
   _ios_setup:
     summary: Clone the repo and generate the Xcode project with XcodeGen.
     steps:
-    - git-clone@8.5.2: {}
+    - bundle::git_clone: {}
     - xcodegen@0.0.5:
         inputs:
         - spec_path: $BITRISE_SOURCE_DIR/apps/ios/project.yml

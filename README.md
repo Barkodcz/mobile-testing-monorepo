@@ -43,6 +43,7 @@ documenting its CI setup in full.
 bitrise.yml                    <- root Bitrise config: includes, app-level envs, everything_fast pipeline
 BITRISE.md                     <- doc for bitrise.yml (root)
 bitrise/
+├── common.yml                  <- shared Step bundles only (no workflows/pipelines of its own), included first
 ├── ios.yml / ios.md            <- iOS: unit, snapshot, XCUITest (x4 approaches), Maestro, Appium, sharded pipeline
 ├── android.yml / android.md    <- Android: unit, Paparazzi snapshot, instrumented UI, Virtual Device Testing
 ├── react-native.yml / react-native.md  <- Jest, Detox (iOS), Maestro (both platforms)

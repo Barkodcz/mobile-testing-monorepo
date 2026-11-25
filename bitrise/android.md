@@ -248,7 +248,7 @@ though it does mean every run re-downloads Gradle dependencies from scratch.
 1. **`git-clone@8.5.2`**.
 2. **`restore-gradle-cache@3.1.2`**.
 3. **`bundle::android_avd_create`** (comment: "boots in the background while we build") — the Step
-   bundle defined in the root [`bitrise.yml`](../bitrise.yml) (see
+   bundle defined in the [`bitrise/common.yml`](../bitrise/common.yml) (see
    [`docs/BITRISE_CONCEPTS.md`](../docs/BITRISE_CONCEPTS.md) §7), wrapping `avd-manager@2.2.0` with
    `profile: pixel_6`, `api_level: "34"`, `tag: google_apis`, `abi: x86_64`. Per StepLib, Android
    emulators cannot run on Apple Silicon machines — consistent with this workflow's Linux
