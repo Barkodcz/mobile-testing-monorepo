@@ -37,13 +37,12 @@ workflows:
     steps:
     - git-clone@8.5.2: {}
     - restore-gradle-cache@3.1.2: {}
-    - script@1.2.1:
-        title: Verify Paparazzi snapshots
+    - gradle-runner@6.0.0:                    # official Step, replaces a raw `./gradlew` script
         inputs:
-        - working_dir: $BITRISE_SOURCE_DIR/apps/android
-        - content: |
-            set -eo pipefail
-            ./gradlew :app:verifyPaparazziDebug
+        - build_root_directory: $BITRISE_SOURCE_DIR/apps/android
+        - gradle_task: ":app:verifyPaparazziDebug"
+        - app_file_include_filter: ""          # this task builds no APK/AAB -- nothing to export
+        - mapping_file_include_filter: ""
     - script@1.2.1:
         title: Merge JUnit XML and keep diff images
         is_always_run: true
@@ -76,13 +75,18 @@ workflows:
     summary: Manual helper. Records Paparazzi snapshots on CI so you can download and commit them.
     steps:
     - git-clone@8.5.2: {}
+    - gradle-runner@6.0.0:                    # official Step, replaces a raw `./gradlew` script
+        inputs:
+        - build_root_directory: $BITRISE_SOURCE_DIR/apps/android
+        - gradle_task: ":app:recordPaparazziDebug"
+        - app_file_include_filter: ""          # this task builds no APK/AAB -- nothing to export
+        - mapping_file_include_filter: ""
     - script@1.2.1:
-        title: Record Paparazzi snapshots
+        title: Zip recorded snapshots
         inputs:
         - working_dir: $BITRISE_SOURCE_DIR/apps/android
         - content: |
             set -eo pipefail
-            ./gradlew :app:recordPaparazziDebug
             cd app/src/test && zip -r "$BITRISE_DEPLOY_DIR/paparazzi-snapshots.zip" snapshots
     - deploy-to-bitrise-io@2.26.2:
         is_always_run: true
@@ -91,9 +95,10 @@ workflows:
     summary: >
       Compose UI tests (instrumented) on an Android emulator, with the whole
       run's screen recording attached to a synthetic test case in the Tests
-      tab. Switched from the native android-instrumented-test Step to a
-      Gradle script + the generic export route, so the recording can be
-      wrapped around the run and attached by filename convention (see
+      tab. Switched from the native android-instrumented-test Step to
+      gradle-runner (official Step, runs :app:connectedDebugAndroidTest
+      directly) + the generic export route, so the recording can be wrapped
+      around the run and attached by filename convention (see
       docs/test-recording-plan.md).
     meta:
       bitrise.io:
@@ -102,24 +107,17 @@ workflows:
     steps:
     - git-clone@8.5.2: {}
     - restore-gradle-cache@3.1.2: {}
-    - avd-manager@2.2.0:                      # boots in the background while we build
-        inputs:
-        - profile: pixel_6
-        - api_level: "34"
-        - tag: google_apis
-        - abi: x86_64
+    - bundle::android_avd_create: {}           # boots in the background while we build
     - wait-for-android-emulator@1.0.10: {}
     - script@1.2.1:
         title: Start screen recording
         inputs:
         - content: $BITRISE_SOURCE_DIR/scripts/recording/start-android.sh /sdcard/bitrise-recordings ui-tests
-    - script@1.2.1:
-        title: Run instrumented UI tests
+    - gradle-runner@6.0.0:                    # official Step, replaces a raw `./gradlew` script
         inputs:
-        - working_dir: $BITRISE_SOURCE_DIR/apps/android
-        - content: |
-            set -eo pipefail
-            ./gradlew :app:connectedDebugAndroidTest
+        - build_root_directory: $BITRISE_SOURCE_DIR/apps/android
+        - gradle_task: ":app:connectedDebugAndroidTest"
+        - app_file_include_filter: ""          # this task builds no new APK/AAB -- nothing to export
     - script@1.2.1:
         title: Stop screen recording
         is_always_run: true

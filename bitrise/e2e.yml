@@ -41,18 +41,20 @@ pipelines:
       ios-maestro-e2e: {}
 
   # Full Maestro suite (both flow files, not split) run as 3 independent
-  # parallel copies -- contrast with android_maestro_sharded below, which
-  # splits the flow files *across* shards. Each copy here runs the complete
-  # e2e/maestro/ suite end-to-end on its own emulator, useful for e.g. flake
-  # detection (do all 3 copies agree?) or soak-testing N concurrent runs
-  # rather than speeding up a single run by dividing the work. Each copy
-  # reports its own Tests tab entry. Manual-trigger only, same cost reasoning
-  # as android_maestro_sharded.
+  # parallel copies of ONE build/one workflow, via Bitrise's native pipeline
+  # `parallel` property -- not 3 hand-duplicated workflows. Contrast with
+  # android_maestro_sharded below, which splits the flow files *across*
+  # shards; each copy here instead runs the complete e2e/maestro/ suite
+  # end-to-end on its own emulator, useful for e.g. flake detection (do all 3
+  # copies agree?) or soak-testing N concurrent runs rather than speeding up
+  # a single run by dividing the work. Each copy reports its own Tests tab
+  # entry (test_name includes $BITRISE_IO_PARALLEL_INDEX, see the workflow
+  # below). Manual-trigger only, same cost reasoning as
+  # android_maestro_sharded.
   maestro_android_parallel:
     workflows:
-      maestro_android_parallel_1: {}
-      maestro_android_parallel_2: {}
-      maestro_android_parallel_3: {}
+      maestro_android_parallel_copy:
+        parallel: 3
 
   # Scenario 3b: build the debug APK once, shard the existing Maestro flows
   # across MAESTRO_SHARD_COUNT (default 3) parallel workflows, each reporting
@@ -78,12 +80,7 @@ workflows:
     steps:
     - git-clone@8.5.2: {}
     - restore-gradle-cache@3.1.2: {}
-    - avd-manager@2.2.0:
-        inputs:
-        - profile: pixel_6
-        - api_level: "34"
-        - tag: google_apis
-        - abi: x86_64
+    - bundle::android_avd_create: {}
     - android-build@1.2.0:
         inputs:
         - project_location: $BITRISE_SOURCE_DIR/apps/android
@@ -100,12 +97,14 @@ workflows:
     - deploy-to-bitrise-io@2.26.2:
         is_always_run: true
 
-  maestro_android_parallel_1:
+  maestro_android_parallel_copy:
     summary: >
-      Parallel copy 1/3 of the full Maestro suite (both flow files, not
-      split -- see android_maestro_sharded for the splitting variant). Part
-      of the maestro_android_parallel pipeline; identical to maestro_android
-      except for test_name, so it reports its own Tests tab entry.
+      One build, run as 3 parallel copies via the maestro_android_parallel
+      pipeline's `parallel: 3` property (not 3 hand-duplicated workflows).
+      Each copy is identical -- its own emulator, its own APK build, the
+      full unsplit e2e/maestro/ suite -- and gets a distinct Tests tab entry
+      because test_name interpolates $BITRISE_IO_PARALLEL_INDEX (Bitrise's
+      own zero-based index per copy: 0, 1, 2).
     meta:
       bitrise.io:
         stack: ubuntu-noble-24.04-bitrise-2025-android
@@ -113,12 +112,7 @@ workflows:
     steps:
     - git-clone@8.5.2: {}
     - restore-gradle-cache@3.1.2: {}
-    - avd-manager@2.2.0:
-        inputs:
-        - profile: pixel_6
-        - api_level: "34"
-        - tag: google_apis
-        - abi: x86_64
+    - bundle::android_avd_create: {}
     - android-build@1.2.0:
         inputs:
         - project_location: $BITRISE_SOURCE_DIR/apps/android
@@ -129,73 +123,7 @@ workflows:
         inputs:
         - app_path: $BITRISE_APK_PATH
         - flow_path: $BITRISE_SOURCE_DIR/e2e/maestro
-        - test_name: Maestro parallel copy 1 (Android)
-        - maestro_version: 2.12.1
-        - num_flaky_test_attempts: 1
-    - save-gradle-cache@1.6.2: {}
-    - deploy-to-bitrise-io@2.26.2:
-        is_always_run: true
-
-  maestro_android_parallel_2:
-    summary: >
-      Parallel copy 2/3, same mechanism as maestro_android_parallel_1.
-    meta:
-      bitrise.io:
-        stack: ubuntu-noble-24.04-bitrise-2025-android
-        machine_type_id: g2.linux.large
-    steps:
-    - git-clone@8.5.2: {}
-    - restore-gradle-cache@3.1.2: {}
-    - avd-manager@2.2.0:
-        inputs:
-        - profile: pixel_6
-        - api_level: "34"
-        - tag: google_apis
-        - abi: x86_64
-    - android-build@1.2.0:
-        inputs:
-        - project_location: $BITRISE_SOURCE_DIR/apps/android
-        - module: app
-        - variant: debug
-    - wait-for-android-emulator@1.0.10: {}
-    - maestro-test@1.2.0:
-        inputs:
-        - app_path: $BITRISE_APK_PATH
-        - flow_path: $BITRISE_SOURCE_DIR/e2e/maestro
-        - test_name: Maestro parallel copy 2 (Android)
-        - maestro_version: 2.12.1
-        - num_flaky_test_attempts: 1
-    - save-gradle-cache@1.6.2: {}
-    - deploy-to-bitrise-io@2.26.2:
-        is_always_run: true
-
-  maestro_android_parallel_3:
-    summary: >
-      Parallel copy 3/3, same mechanism as maestro_android_parallel_1.
-    meta:
-      bitrise.io:
-        stack: ubuntu-noble-24.04-bitrise-2025-android
-        machine_type_id: g2.linux.large
-    steps:
-    - git-clone@8.5.2: {}
-    - restore-gradle-cache@3.1.2: {}
-    - avd-manager@2.2.0:
-        inputs:
-        - profile: pixel_6
-        - api_level: "34"
-        - tag: google_apis
-        - abi: x86_64
-    - android-build@1.2.0:
-        inputs:
-        - project_location: $BITRISE_SOURCE_DIR/apps/android
-        - module: app
-        - variant: debug
-    - wait-for-android-emulator@1.0.10: {}
-    - maestro-test@1.2.0:
-        inputs:
-        - app_path: $BITRISE_APK_PATH
-        - flow_path: $BITRISE_SOURCE_DIR/e2e/maestro
-        - test_name: Maestro parallel copy 3 (Android)
+        - test_name: Maestro parallel copy $BITRISE_IO_PARALLEL_INDEX (Android)
         - maestro_version: 2.12.1
         - num_flaky_test_attempts: 1
     - save-gradle-cache@1.6.2: {}
@@ -253,12 +181,7 @@ workflows:
     steps:
     - git-clone@8.5.2: {}
     - restore-gradle-cache@3.1.2: {}
-    - avd-manager@2.2.0:
-        inputs:
-        - profile: pixel_6
-        - api_level: "34"
-        - tag: google_apis
-        - abi: x86_64
+    - bundle::android_avd_create: {}
     - android-build@1.2.0:
         inputs:
         - project_location: $BITRISE_SOURCE_DIR/apps/android
@@ -345,12 +268,7 @@ workflows:
     - pull-intermediate-files@1.3.7:
         inputs:
         - artifact_sources: android-maestro-shard-build
-    - avd-manager@2.2.0:
-        inputs:
-        - profile: pixel_6
-        - api_level: "34"
-        - tag: google_apis
-        - abi: x86_64
+    - bundle::android_avd_create: {}
     - script@1.2.1:
         title: Assign this shard's flows
         inputs:
@@ -390,12 +308,7 @@ workflows:
     - pull-intermediate-files@1.3.7:
         inputs:
         - artifact_sources: android-maestro-shard-build
-    - avd-manager@2.2.0:
-        inputs:
-        - profile: pixel_6
-        - api_level: "34"
-        - tag: google_apis
-        - abi: x86_64
+    - bundle::android_avd_create: {}
     - script@1.2.1:
         title: Assign this shard's flows
         inputs:
@@ -439,12 +352,7 @@ workflows:
     - pull-intermediate-files@1.3.7:
         inputs:
         - artifact_sources: android-maestro-shard-build
-    - avd-manager@2.2.0:
-        inputs:
-        - profile: pixel_6
-        - api_level: "34"
-        - tag: google_apis
-        - abi: x86_64
+    - bundle::android_avd_create: {}
     - script@1.2.1:
         title: Assign this shard's flows
         inputs:

@@ -117,12 +117,7 @@ workflows:
         inputs:
         - workdir: $BITRISE_SOURCE_DIR/apps/react-native
         - command: ci
-    - avd-manager@2.2.0:
-        inputs:
-        - profile: pixel_6
-        - api_level: "34"
-        - tag: google_apis
-        - abi: x86_64
+    - bundle::android_avd_create: {}
     # Release, not debug: debug builds need the Metro bundler running to
     # render anything (classic RN gotcha -- confirmed live: a debug APK
     # here showed neither "Count: 0" nor increment_button at all).
@@ -199,12 +194,7 @@ workflows:
         # an unsigned app -- "SBMainWorkspace" (confirmed live, same root
         # cause as ios-maestro-e2e). Ad-hoc signing fixes it.
         - content: codesign --force --deep --sign - "$BITRISE_APP_DIR_PATH"
-    - script@1.2.1:
-        title: Boot simulator for Maestro
-        inputs:
-        - content: |
-            xcrun simctl boot "Bitrise iOS default" 2>/dev/null || true
-            xcrun simctl bootstatus "Bitrise iOS default" -b
+    - bundle::ios_simulator_boot: {}
     - maestro-test@1.2.0:
         inputs:
         - app_path: $BITRISE_APP_DIR_PATH

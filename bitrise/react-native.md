@@ -243,8 +243,10 @@ override, matching the root default stack but a larger machine).
 1. **`git-clone@8.5.2`** — same as above.
 2. **`restore-npm-cache@3.0.2`** — same mechanism.
 3. **`npm@3.1.0`** — `npm ci` in `apps/react-native`.
-4. **`avd-manager@2.2.0`** — *AVD Manager*. Inputs: `profile: pixel_6`, `api_level: "34"`,
-   `tag: google_apis`, `abi: x86_64`. Creates and boots an Android Virtual Device matching a
+4. **`bundle::android_avd_create`** — Step bundle (root [`bitrise.yml`](../bitrise.yml), see
+   [`docs/BITRISE_CONCEPTS.md`](../docs/BITRISE_CONCEPTS.md) §7; previously an inline
+   `avd-manager@2.2.0` here), default inputs: `avd_profile: pixel_6`, `avd_api_level: "34"`,
+   `avd_tag: google_apis`, `avd_abi: x86_64`. Creates and boots an Android Virtual Device matching a
    Pixel 6 on API 34 with Google APIs, x86_64 (suitable for the Linux CI host, which can't run
    ARM images at reasonable speed without nested virtualization).
 5. **`android-build@1.2.0`** — *Android Build*. Official Step; replaced a
@@ -331,7 +333,9 @@ Runs on `osx-xcode-27.2.x` / `g2.mac.medium`.
    the launching, but Maestro launches the app via a bare `simctl launch`, which was denied by
    SpringBoard on iOS 18.x simulators for an unsigned app ("SBMainWorkspace" — confirmed live,
    same root cause as the `ios-maestro-e2e` native-app workflow). Ad-hoc signing fixes it.
-7. **`script@1.2.1`**, titled "Boot simulator for Maestro".
+7. **`bundle::ios_simulator_boot`** — Step bundle (root [`bitrise.yml`](../bitrise.yml), see
+   [`docs/BITRISE_CONCEPTS.md`](../docs/BITRISE_CONCEPTS.md) §7; previously an inline
+   `script@1.2.1` titled "Boot simulator for Maestro"):
    ```bash
    xcrun simctl boot "Bitrise iOS default" 2>/dev/null || true
    xcrun simctl bootstatus "Bitrise iOS default" -b

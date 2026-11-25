@@ -149,13 +149,15 @@ versions repo-wide).
 
 1. **`git-clone@8.5.2`** — same as above.
 2. **`restore-gradle-cache@3.1.2`** — same as above.
-3. **`script@1.2.1`**, titled *"Verify Paparazzi snapshots"**. "Script" — runs an arbitrary shell
-   script (default runner `bash`). `working_dir: $BITRISE_SOURCE_DIR/apps/android`. Content:
-   ```bash
-   set -eo pipefail
-   ./gradlew :app:verifyPaparazziDebug
-   ```
-   `set -eo pipefail` makes the script fail fast on any command error (including inside a pipeline).
+3. **`gradle-runner@6.0.0`** — "Gradle Runner," the official Step for running an arbitrary Gradle
+   task (replaced a raw `./gradlew` script — see
+   [`docs/BITRISE_CONCEPTS.md`](../docs/BITRISE_CONCEPTS.md) §6). Inputs:
+   `build_root_directory: $BITRISE_SOURCE_DIR/apps/android`,
+   `gradle_task: ":app:verifyPaparazziDebug"`, and both
+   `app_file_include_filter`/`mapping_file_include_filter` set to `""` — this task builds no
+   APK/AAB/mapping file, so the Step's default copy-into-deploy-dir filters would otherwise
+   opportunistically (and pointlessly) pick up stale ones from a previous build on the same
+   machine.
    `verifyPaparazziDebug` is the Paparazzi Gradle plugin's verification task: it renders each
    `@Test`-annotated Compose snapshot off-device and diffs it against the committed golden image in
    `app/src/test/snapshots`, failing the task (and thus the step, since no `is_always_run`) if any diff
@@ -213,17 +215,20 @@ show no Paparazzi results even though step 4 ran fine).
 > Summary: Manual helper. Records Paparazzi snapshots on CI so you can download and commit them.
 
 1. **`git-clone@8.5.2`**.
-2. **`script@1.2.1`**, titled *"Record Paparazzi snapshots"*:
+2. **`gradle-runner@6.0.0`** — same official Step as §4.2 step 3, task
+   `:app:recordPaparazziDebug` this time, same `project_location`/empty include filters.
+   `recordPaparazziDebug` is Paparazzi's recording task — it (re)writes the reference/golden images
+   instead of verifying against them.
+3. **`script@1.2.1`**, titled *"Zip recorded snapshots"*:
    ```bash
    set -eo pipefail
-   ./gradlew :app:recordPaparazziDebug
    cd app/src/test && zip -r "$BITRISE_DEPLOY_DIR/paparazzi-snapshots.zip" snapshots
    ```
-   `recordPaparazziDebug` is Paparazzi's recording task — it (re)writes the reference/golden images
-   instead of verifying against them. The script then zips the resulting `app/src/test/snapshots`
-   directory so a human can download it from the Artifacts tab, extract it locally, and commit the
-   updated golden images into the repo.
-3. **`deploy-to-bitrise-io@2.26.2`** (`is_always_run: true`) — uploads `paparazzi-snapshots.zip`.
+   Zips the resulting `app/src/test/snapshots` directory so a human can download it from the
+   Artifacts tab, extract it locally, and commit the updated golden images into the repo. Split out
+   from the Gradle invocation above (which used to be one combined script) since there's no official
+   Step for an arbitrary `zip` call.
+4. **`deploy-to-bitrise-io@2.26.2`** (`is_always_run: true`) — uploads `paparazzi-snapshots.zip`.
 
 No `restore-gradle-cache`/`save-gradle-cache` here — reasonable for an infrequent manual workflow,
 though it does mean every run re-downloads Gradle dependencies from scratch.
@@ -240,12 +245,16 @@ though it does mean every run re-downloads Gradle dependencies from scratch.
 
 1. **`git-clone@8.5.2`**.
 2. **`restore-gradle-cache@3.1.2`**.
-3. **`avd-manager@2.2.0`** (comment: "boots in the background while we build") — "AVD Manager."
-   Creates and boots an Android emulator. Inputs: `profile: pixel_6`, `api_level: "34"`,
-   `tag: google_apis`, `abi: x86_64`. Per StepLib, Android emulators cannot run on Apple Silicon
-   machines — consistent with this workflow's Linux (`ubuntu-noble...`) stack. By default the step
-   disables animations and waits for boot itself, but this workflow still runs a separate
-   `wait-for-android-emulator` step next (belt-and-braces / explicit boot gate before tests start).
+3. **`bundle::android_avd_create`** (comment: "boots in the background while we build") — the Step
+   bundle defined in the root [`bitrise.yml`](../bitrise.yml) (see
+   [`docs/BITRISE_CONCEPTS.md`](../docs/BITRISE_CONCEPTS.md) §7), wrapping `avd-manager@2.2.0` with
+   `profile: pixel_6`, `api_level: "34"`, `tag: google_apis`, `abi: x86_64`. Per StepLib, Android
+   emulators cannot run on Apple Silicon machines — consistent with this workflow's Linux
+   (`ubuntu-noble...`) stack. By default the step disables animations and waits for boot itself, but
+   this workflow still runs a separate `wait-for-android-emulator` step next (belt-and-braces /
+   explicit boot gate before tests start) — not folded into the bundle, since other workflows using
+   the same bundle need to run different Steps between AVD creation and the boot wait (see
+   `docs/BITRISE_CONCEPTS.md` §7).
 4. **`wait-for-android-emulator@1.0.10`** — "Wait for Android emulator." Confirms the emulator (serial
    from `$BITRISE_EMULATOR_SERIAL`, exported by `avd-manager`) has finished booting before proceeding;
    no inputs overridden (uses the default serial/timeout/SDK path).
@@ -259,14 +268,12 @@ though it does mean every run re-downloads Gradle dependencies from scratch.
    `adb shell screenrecord --bit-rate 2000000 <device-dir>/ui-tests_chunk<N>.mp4`, writing the looping
    process's PID to `/tmp/bitrise-android-recording.pid` so `stop-android.sh` can find and kill it
    later. The loop exists because Android's `screenrecord` self-terminates after ~180 seconds.
-6. **`script@1.2.1`**, titled *"Run instrumented UI tests"*, `working_dir: $BITRISE_SOURCE_DIR/apps/android`:
-   ```bash
-   set -eo pipefail
-   ./gradlew :app:connectedDebugAndroidTest
-   ```
-   Runs the instrumented Compose UI test suite (`CounterScreenUiTest.kt`) against the emulator started
-   in step 3. No `is_always_run`, so a test failure here will mark the step/workflow failed — but every
-   step after this one is `is_always_run: true` so recording/results still get collected.
+6. **`gradle-runner@6.0.0`** — same official Step as §4.2 step 3 and §4.3 step 2, task
+   `:app:connectedDebugAndroidTest`, `app_file_include_filter: ""` (this task builds no new
+   APK/AAB). Runs the instrumented Compose UI test suite (`CounterScreenUiTest.kt`) against the
+   emulator started in step 3. No `is_always_run`, so a test failure here will mark the
+   step/workflow failed — but every step after this one is `is_always_run: true` so
+   recording/results still get collected.
 7. **`script@1.2.1`**, titled *"Stop screen recording"* (`is_always_run: true`):
    ```bash
    SCREENSHOT="$($BITRISE_SOURCE_DIR/scripts/recording/screenshot-android.sh \
@@ -459,9 +466,12 @@ Minimal set to copy for a similar native Android app:
 - For Paparazzi: add the `app.cash.paparazzi` Gradle plugin, copy
   [`BitrisePaparazzi.kt`](../apps/android/app/src/test/java/io/bitrise/sample/counter/BitrisePaparazzi.kt)'s
   `BitriseSnapshotHandler` pattern (naming each rendered frame per the attachment convention) and the
-  `verifyPaparazziDebug`/`recordPaparazziDebug` script steps + `custom-test-results-export` wiring.
-- For instrumented UI tests with video: copy the `avd-manager` + `wait-for-android-emulator` steps
-  (update `profile`/`api_level`/`tag`/`abi` to match your target device/API), the three
+  `verifyPaparazziDebug`/`recordPaparazziDebug` `gradle-runner` steps + `custom-test-results-export`
+  wiring.
+- For instrumented UI tests with video: copy the `bundle::android_avd_create` Step bundle +
+  `wait-for-android-emulator` steps (update the bundle's `avd_profile`/`avd_api_level`/`avd_tag`/
+  `avd_abi` inputs to match your target device/API, or just inline `avd-manager` yourself if you'd
+  rather not pull in the shared bundle), the three
   `scripts/recording/*.sh` scripts (platform-agnostic beyond the `adb`/Android assumptions),
   [`attach_media_to_junit.py`](../scripts/reporting/attach_media_to_junit.py) (fully generic — only
   needs a `--classname`/`--name` matching your test suite), and the merge/export steps — update

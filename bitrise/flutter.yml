@@ -95,12 +95,7 @@ workflows:
         machine_type_id: g2.linux.large
     before_run: [_flutter_setup]
     steps:
-    - avd-manager@2.2.0:
-        inputs:
-        - profile: pixel_6
-        - api_level: "34"
-        - tag: google_apis
-        - abi: x86_64
+    - bundle::android_avd_create: {}
     - wait-for-android-emulator@1.0.10: {}
     - script@1.2.1:
         title: Start screen recording
@@ -172,12 +167,7 @@ workflows:
         machine_type_id: g2.linux.large
     before_run: [_flutter_setup]
     steps:
-    - avd-manager@2.2.0:
-        inputs:
-        - profile: pixel_6
-        - api_level: "34"
-        - tag: google_apis
-        - abi: x86_64
+    - bundle::android_avd_create: {}
     - script@1.2.1:
         title: Prepare Android project for Patrol
         inputs:
@@ -334,12 +324,7 @@ workflows:
             else
               echo "No Podfile, skipping pod install (project uses Swift Package Manager)."
             fi
-    - script@1.2.1:
-        title: Boot simulator for Patrol
-        inputs:
-        - content: |
-            xcrun simctl boot "Bitrise iOS default" 2>/dev/null || true
-            xcrun simctl bootstatus "Bitrise iOS default" -b
+    - bundle::ios_simulator_boot: {}
     - script@1.2.1:
         title: Start screen recording
         inputs:

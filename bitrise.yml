@@ -19,6 +19,40 @@ include:
 - path: bitrise/flutter.yml
 - path: bitrise/e2e.yml
 
+# Reusable Step sequences, shared across every included module (see
+# docs/BITRISE_CONCEPTS.md "Step bundles" section for the full writeup of
+# what each one replaces and why it lives here rather than in one module).
+step_bundles:
+  # Just avd-manager, not also wait-for-android-emulator -- several
+  # workflows deliberately run other steps (building the APK, assigning a
+  # shard's flow files) *between* creating the AVD and waiting for it to
+  # finish booting, to overlap boot time with other work. Bundling the wait
+  # in too would force them adjacent and serialize that overlap away, so
+  # each call site still adds its own `wait-for-android-emulator@1.0.10: {}`
+  # wherever it already belonged.
+  android_avd_create:
+    inputs:
+    - avd_profile: pixel_6
+    - avd_api_level: "34"
+    - avd_tag: google_apis
+    - avd_abi: x86_64
+    steps:
+    - avd-manager@2.2.0:
+        inputs:
+        - profile: $avd_profile
+        - api_level: $avd_api_level
+        - tag: $avd_tag
+        - abi: $avd_abi
+
+  ios_simulator_boot:
+    steps:
+    - script@1.2.1:
+        title: Boot simulator
+        inputs:
+        - content: |
+            xcrun simctl boot "Bitrise iOS default" 2>/dev/null || true
+            xcrun simctl bootstatus "Bitrise iOS default" -b
+
 app:
   envs:
   - IOS_DIR: apps/ios

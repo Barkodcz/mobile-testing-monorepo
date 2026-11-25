@@ -169,12 +169,7 @@ workflows:
         # "SBMainWorkspace" (confirmed live across 3 separate attempts at
         # other fixes, builds #98/#108/#119/#127). Ad-hoc signing fixes it.
         - content: codesign --force --deep --sign - "$BITRISE_APP_DIR_PATH"
-    - script@1.2.1:
-        title: Boot simulator for Maestro
-        inputs:
-        - content: |
-            xcrun simctl boot "Bitrise iOS default" 2>/dev/null || true
-            xcrun simctl bootstatus "Bitrise iOS default" -b
+    - bundle::ios_simulator_boot: {}
     - maestro-test@1.2.0:
         inputs:
         - app_path: $BITRISE_APP_DIR_PATH
@@ -250,13 +245,12 @@ workflows:
         machine_type_id: g2.mac.medium
     before_run: [_ios_setup]
     steps:
+    - bundle::ios_simulator_boot: {}
     - script@1.2.1:
-        title: Build for simulator and start local Appium server
+        title: Start local Appium server
         inputs:
         - content: |
             set -eo pipefail
-            xcrun simctl boot "Bitrise iOS default" 2>/dev/null || true
-            xcrun simctl bootstatus "Bitrise iOS default" -b
             # Hand Appium the exact UDID of the simulator we just booted,
             # instead of a hardcoded platform_version -- the build step
             # below uses OS=latest, which drifts across stack updates and
@@ -484,10 +478,7 @@ workflows:
             # alphabetically for shard N.
             ONLY_TESTING_PATH="$(find "$BITRISE_TEST_SHARDS_PATH" -maxdepth 1 -type f | sort | sed -n '1p')"
             envman add --key ONLY_TESTING_PATH --value "$ONLY_TESTING_PATH"
-    - script@1.2.1:
-        title: Boot simulator
-        inputs:
-        - content: xcrun simctl boot "Bitrise iOS default" 2>/dev/null || true
+    - bundle::ios_simulator_boot: {}           # also fixes the missing bootstatus wait this step used to have, see §9
     - xcode-test-without-building@1.0.1:
         inputs:
         - xctestrun: $XCTESTRUN_FILE_PATH
@@ -517,10 +508,7 @@ workflows:
             envman add --key XCTESTRUN_FILE_PATH --value "$XCTESTRUN_FILE_PATH"
             ONLY_TESTING_PATH="$(find "$BITRISE_TEST_SHARDS_PATH" -maxdepth 1 -type f | sort | sed -n '2p')"
             envman add --key ONLY_TESTING_PATH --value "$ONLY_TESTING_PATH"
-    - script@1.2.1:
-        title: Boot simulator
-        inputs:
-        - content: xcrun simctl boot "Bitrise iOS default" 2>/dev/null || true
+    - bundle::ios_simulator_boot: {}           # also fixes the missing bootstatus wait this step used to have, see §9
     - xcode-test-without-building@1.0.1:
         inputs:
         - xctestrun: $XCTESTRUN_FILE_PATH

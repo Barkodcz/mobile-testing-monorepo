@@ -31,11 +31,14 @@ across more than one device at once:
   Maestro flow *files* out across three parallel shard workflows (each shard
   runs a *subset* of the flows), each reporting its own Tests-tab entry.
 - **`maestro_android_parallel`** — runs the *entire* Maestro suite (both flow
-  files, unsplit) three times over, as three fully independent parallel
-  copies (`maestro_android_parallel_1/2/3`), each on its own emulator with
-  its own Tests-tab entry. Contrast with sharding: this doesn't divide the
-  work to go faster, it repeats the whole suite concurrently (useful for
-  flake detection or soak-testing N simultaneous runs).
+  files, unsplit) three times over, as **one workflow**
+  (`maestro_android_parallel_copy`) run as 3 parallel copies via Bitrise's
+  native pipeline `parallel: 3` property — not 3 hand-duplicated workflows.
+  Each copy gets its own emulator and its own Tests-tab entry (via
+  `$BITRISE_IO_PARALLEL_INDEX` in the `test_name`). Contrast with sharding:
+  this doesn't divide the work to go faster, it repeats the whole suite
+  concurrently (useful for flake detection or soak-testing N simultaneous
+  runs).
 - **`maestro_cross_platform`** — runs the same flows against *both* native
   apps in one pipeline: `maestro_android` (Linux emulator, this file) and
   `ios-maestro-e2e` ([`bitrise/ios.yml`](ios.yml), Mac simulator) as two
@@ -53,11 +56,12 @@ What a reader should expect to see on a build:
   each producing a Tests-tab entry (because, with the current two flow
   files, those are the shards that actually have flows to run), and shard 3
   running 0 flows at the default shard count (see §9).
-- `maestro_android_parallel`: three workflow runs in parallel, no
-  `depends_on` and no shared build stage (each copy builds its own APK) —
-  three full, independent Tests-tab entries ("Maestro parallel copy 1/2/3
-  (Android)"), each with every flow's screenshots + video attached, same as
-  a single `maestro_android` run.
+- `maestro_android_parallel`: three parallel copies of **one** workflow
+  (`maestro_android_parallel_copy`, via `parallel: 3`), no shared build stage
+  (each copy builds its own APK) — three full, independent Tests-tab entries
+  ("Maestro parallel copy 0/1/2 (Android)", zero-based per
+  `$BITRISE_IO_PARALLEL_INDEX`), each with every flow's screenshots + video
+  attached, same as a single `maestro_android` run.
 - `maestro_cross_platform`: two workflow runs in parallel — `maestro_android`
   and `ios-maestro-e2e` — each producing its own existing Tests-tab entry
   ("Maestro E2E (Android)" / "Maestro E2E (iOS)"); nothing new to report
@@ -77,7 +81,7 @@ What a reader should expect to see on a build:
 | `android-appium-local` | `ubuntu-noble-24.04-bitrise-2025-android` | `g2.linux.large` |
 | `android-maestro-shard-build` | `ubuntu-noble-24.04-bitrise-2025-android` | `g2.linux.medium` |
 | `android-maestro-shard-1/2/3` | `ubuntu-noble-24.04-bitrise-2025-android` | `g2.linux.large` |
-| `maestro_android_parallel_1/2/3` | `ubuntu-noble-24.04-bitrise-2025-android` | `g2.linux.large` |
+| `maestro_android_parallel_copy` (×3 via `parallel: 3`) | `ubuntu-noble-24.04-bitrise-2025-android` | `g2.linux.large` |
 
 `maestro_cross_platform`'s own `ios-maestro-e2e` stage is defined in, and
 uses the stack/machine documented in, [`bitrise/ios.md`](ios.md) (`osx-xcode-27.2.x`
@@ -93,16 +97,18 @@ BrowserStack's API.
 
 ### Tools / versions
 
-- **Android SDK / emulator image**: `avd-manager@2.2.0` with
-  `profile: pixel_6`, `api_level: "34"`, `tag: google_apis`, `abi: x86_64`
-  (used by `maestro_android`, `android-appium-local`, and all three
-  `android-maestro-shard-*` workflows — `android-maestro-shard-build` itself
+- **Android SDK / emulator image**: the `bundle::android_avd_create` Step
+  bundle (defined in the root [`bitrise.yml`](../bitrise.yml), see
+  [`docs/BITRISE_CONCEPTS.md`](../docs/BITRISE_CONCEPTS.md) "Step bundles"),
+  which wraps `avd-manager@2.2.0` with `profile: pixel_6`, `api_level: "34"`,
+  `tag: google_apis`, `abi: x86_64` — used by `maestro_android`,
+  `maestro_android_parallel_copy`, `android-appium-local`, and all three
+  `android-maestro-shard-*` workflows (`android-maestro-shard-build` itself
   needs no emulator since it only builds the APK).
 - **Maestro CLI**: `maestro_android` uses whatever version the
   `maestro-test@1.2.0` step defaults to (`2.11.0` per StepLib, not pinned in
-  this YAML); the three sharded `maestro-test@1.2.0` invocations, and the
-  three `maestro_android_parallel_1/2/3` invocations, explicitly pin
-  `maestro_version: 2.12.1`.
+  this YAML); the three sharded `maestro-test@1.2.0` invocations, and
+  `maestro_android_parallel_copy`'s, explicitly pin `maestro_version: 2.12.1`.
 - **Node.js** (for the local Appium server in `android-appium-local`): no
   explicit Node-version step — relies on whatever Node ships on the stack
   image, then installs `appium@2.11.0` globally via `npm install -g` and the
@@ -176,10 +182,13 @@ BrowserStack's API.
   *"Part of the android_maestro_sharded pipeline — don't start this workflow
   directly."*).
 - **`maestro_android_parallel`** pipeline: no `triggers:` block — manual-start
-  only, same cost reasoning as `android_maestro_sharded`. Three workflows
-  (`maestro_android_parallel_1/2/3`), no `depends_on` between them, so all
-  three start simultaneously — unlike the sharded pipeline, there's no shared
-  build stage; each copy builds its own APK independently.
+  only, same cost reasoning as `android_maestro_sharded`. **One** workflow,
+  `maestro_android_parallel_copy`, with `parallel: 3` set on it (Bitrise's
+  native pipeline property for running N copies of a single workflow — see
+  [`docs/BITRISE_CONCEPTS.md`](../docs/BITRISE_CONCEPTS.md) "Parallel pipeline
+  copies") — not 3 hand-duplicated workflow definitions. All 3 copies start
+  simultaneously; unlike the sharded pipeline, there's no shared build stage,
+  each copy builds its own APK independently.
 - **`maestro_cross_platform`** pipeline: no `triggers:` block — manual-start
   only (adding a Mac stage to anything that runs on every push would spend
   Mac-minutes on Android-only changes too). Two workflows, `maestro_android`
@@ -239,7 +248,7 @@ android-maestro-shard-build
 |---|---|---|---|---|
 | 1 | `git-clone@8.5.2` — *Git Clone Repository* | Checks out the repo and exports git metadata. | *(defaults)* | Standard first step. |
 | 2 | `restore-gradle-cache@3.1.2` — *Restore Gradle Cache* | Restores Gradle dependency caches via Bitrise's key-based caching. | *(defaults)* | Pairs with `save-gradle-cache` later. |
-| 3 | `avd-manager@2.2.0` — *AVD Manager* | Creates and boots an Android emulator for device testing. StepLib warns emulators can't run on Apple Silicon machines — consistent with this workflow's Linux stack. | `profile: pixel_6`, `api_level: "34"`, `tag: google_apis`, `abi: x86_64` | Outputs `BITRISE_EMULATOR_SERIAL`, consumed implicitly by the next `wait-for-android-emulator` step's default input. |
+| 3 | `bundle::android_avd_create` | Step bundle (root [`bitrise.yml`](../bitrise.yml), see [`docs/BITRISE_CONCEPTS.md`](../docs/BITRISE_CONCEPTS.md) §7; previously an inline `avd-manager@2.2.0` here) — creates and boots an Android emulator for device testing. StepLib warns emulators can't run on Apple Silicon machines — consistent with this workflow's Linux stack. | default inputs: `avd_profile: pixel_6`, `avd_api_level: "34"`, `avd_tag: google_apis`, `avd_abi: x86_64` | Outputs `BITRISE_EMULATOR_SERIAL`, consumed implicitly by the next `wait-for-android-emulator` step's default input. |
 | 4 | `android-build@1.2.0` — *Android Build* | Official Step: installs Gradle dependencies and builds an APK/AAB, exporting its path as `$BITRISE_APK_PATH`. Replaced a `./gradlew :app:assembleDebug` script. | `project_location: $BITRISE_SOURCE_DIR/apps/android`, `module: app`, `variant: debug` | Produces `apps/android/app/build/outputs/apk/debug/app-debug.apk`, matched by the Step's own default `app_path_pattern` (`*/build/outputs/apk/*.apk`) and exported as `$BITRISE_APK_PATH` — no manual path construction needed downstream. Gradle task resolution comes from the single `:app` module declared in [`settings.gradle.kts`](../apps/android/settings.gradle.kts) and the `com.android.application` plugin in [`app/build.gradle.kts`](../apps/android/app/build.gradle.kts). Confirmed working live (build #189/#199). |
 | 5 | `wait-for-android-emulator@1.0.10` — *Wait for Android emulator* | Waits for the AVD to finish booting (reads `$BITRISE_EMULATOR_SERIAL` by default). | *(defaults)* | Runs after the APK build rather than right after step 3 — harmless ordering since boot and Gradle build happen in parallel wall-clock time either way, but it does mean a slow emulator boot is only waited-for once the build is already done. |
 | 6 | `maestro-test@1.2.0` — *Maestro Test* | Installs the Maestro CLI, installs the app on the device, runs `maestro test`, and exports results (JUnit + screenshots + `startRecording` videos + command logs per test case) to the Test Reports page; also zips the Maestro output folder as an artifact. | `app_path: $BITRISE_APK_PATH`, `flow_path: $BITRISE_SOURCE_DIR/e2e/maestro`, `test_name: "Maestro E2E (Android)"`, `num_flaky_test_attempts: 1` | `flow_path` points at the whole `e2e/maestro/` directory, so both `counter_basic.yaml` and `counter_reset.yaml` run (per [`config.yaml`](../e2e/maestro/config.yaml)'s `flows: ["*.yaml"]` glob). `num_flaky_test_attempts: 1` means one retry of a failed flow before it's reported as failed. Maestro CLI version not pinned here (StepLib default `2.11.0`), unlike the sharded workflows which pin `2.12.1` — a minor inconsistency worth aligning if reproducibility across workflows matters. |
@@ -302,7 +311,7 @@ server instead of BrowserStack, reusing `test_counter.py` unchanged via the
 |---|---|---|---|---|
 | 1 | `git-clone@8.5.2` | Checkout. | *(defaults)* | |
 | 2 | `restore-gradle-cache@3.1.2` | Restore Gradle cache. | *(defaults)* | |
-| 3 | `avd-manager@2.2.0` | Create/boot emulator. | same as §4.1 step 3 | |
+| 3 | `bundle::android_avd_create` | Create/boot emulator. | same bundle as §4.1 step 3 | |
 | 4 | `android-build@1.2.0` — *Android Build* | Same official Step, `variant: debug`. Replaced a `./gradlew :app:assembleDebug` script. | `project_location: $BITRISE_SOURCE_DIR/apps/android`, `module: app`, `variant: debug` | Debug build here (not release) since there's no BrowserStack signing/upload requirement — the local Appium driver installs the APK directly, reading its path from `$BITRISE_APK_PATH`. |
 | 5 | `wait-for-android-emulator@1.0.10` | Wait for boot. | *(defaults)* | |
 | 6 | `script@1.2.1` — *Start local Appium server* | Shell script, see breakdown below. | *(no working_dir override — defaults to `$BITRISE_SOURCE_DIR`)* | |
@@ -373,7 +382,7 @@ the `awk` filter, the `test_name`, and the temp directory name. Walkthrough
 |---|---|---|---|---|
 | 1 | `git-clone@8.5.2` | Checkout. | *(defaults)* | |
 | 2 | `pull-intermediate-files@1.3.7` — *Pull Pipeline intermediate files* | Downloads intermediate files produced by a prior pipeline stage. | `artifact_sources: android-maestro-shard-build` | Restores `BITRISE_APK_PATH` (both the file and, implicitly, the env var pointing at it) from the build stage. |
-| 3 | `avd-manager@2.2.0` | Create/boot emulator. | same params as §4.1 | |
+| 3 | `bundle::android_avd_create` | Create/boot emulator. | same bundle/params as §4.1 | |
 | 4 | `script@1.2.1` — *Assign this shard's flows* | Shell script, see below. | *(no working_dir override)* | |
 | 5 | `wait-for-android-emulator@1.0.10` | Wait for boot. | *(defaults)* | |
 | 6 | `maestro-test@1.2.0` | Run Maestro flows. | `app_path: $BITRISE_APK_PATH`, `flow_path: /tmp/maestro-shard-1`, `test_name: "Maestro shard 1 (Android)"`, `maestro_version: 2.12.1`, `num_flaky_test_attempts: 1`, `run_if: '{{enveq "MAESTRO_SHARD_HAS_FLOWS" "true"}}'` | `run_if` conditionally skips the whole step when no flows were assigned to this shard — see §9. Each shard's distinct `test_name` ("Maestro shard 1/2/3 (Android)") is what gives each shard its own separate Tests-tab entry (see §6). |
@@ -428,19 +437,26 @@ Shard 2 and shard 3 differ only in: the temp dir name
 (`NR % n == 2`, `NR % n == 0`), the `test_name` (`Maestro shard 2/3
 (Android)`), and the echoed shard number.
 
-### 4.6 `maestro_android_parallel_1` / `-2` / `-3`
+### 4.6 `maestro_android_parallel_copy` (×3 via `parallel: 3`)
 
-Part of the `maestro_android_parallel` pipeline. All three are byte-for-byte
-identical to `maestro_android` (§4.1) — same steps, same `flow_path`
+Part of the `maestro_android_parallel` pipeline. One workflow definition —
+the pipeline's `workflows:` entry sets `parallel: 3` on it (see
+[`docs/BITRISE_CONCEPTS.md`](../docs/BITRISE_CONCEPTS.md) "Parallel pipeline
+copies"), so Bitrise runs 3 independent copies as 3 separate builds, each
+exposing `$BITRISE_IO_PARALLEL_INDEX` (`0`, `1`, `2`) and
+`$BITRISE_IO_PARALLEL_TOTAL` (`3`). Otherwise byte-for-byte identical to
+`maestro_android` (§4.1) — same steps, same `flow_path`
 (`$BITRISE_SOURCE_DIR/e2e/maestro`, i.e. every flow file, unsplit) — except
-for the `test_name` input (`"Maestro parallel copy 1/2/3 (Android)"`) and
-pinning `maestro_version: 2.12.1` (which `maestro_android` itself doesn't
-pin, see §9). Each copy clones the repo, boots its own emulator, builds its
-own APK, and runs the full suite independently; there's no shared build
-stage and no `pipeline_intermediate_files` anywhere in these three
-workflows, unlike `android-maestro-shard-build`/`-1/2/3` — the whole point
-is three fully independent runs of the same suite, not three subsets of one
-run.
+the `test_name` input interpolates `$BITRISE_IO_PARALLEL_INDEX`
+(`"Maestro parallel copy $BITRISE_IO_PARALLEL_INDEX (Android)"`, so each
+copy gets its own Tests-tab entry) and pins `maestro_version: 2.12.1` (which
+`maestro_android` itself doesn't pin, see §9). Each copy clones the repo,
+boots its own emulator (via `bundle::android_avd_create`, see
+[`docs/BITRISE_CONCEPTS.md`](../docs/BITRISE_CONCEPTS.md) "Step bundles"),
+builds its own APK, and runs the full suite independently; there's no shared
+build stage and no `pipeline_intermediate_files` anywhere here, unlike
+`android-maestro-shard-build`/`-1/2/3` — the whole point is three fully
+independent runs of the same suite, not three subsets of one run.
 
 ### 4.7 `maestro_cross_platform` pipeline
 
@@ -509,7 +525,7 @@ elsewhere in this repo for frameworks that record at suite granularity.
 | `appium_browserstack` | `pytest --junitxml=test-results/appium.xml` | `e2e/appium/test-results/appium.xml` (plus the per-test screenshot/video files alongside it) | `custom-test-results-export@2.0.0` packages it for `deploy-to-bitrise-io@2.26.2` to actually upload | `test_name: "Appium on BrowserStack"` |
 | `android-appium-local` | `pytest --junitxml=test-results/appium-local.xml` | `e2e/appium/test-results/appium-local.xml` | same two-step pattern | `test_name: "Appium on local Android emulator"` |
 | `android-maestro-shard-1/2/3` | Native JUnit export via `maestro-test@1.2.0` (same as `maestro_android`, scoped to that shard's flow subset) | Internal to the step | `deploy-to-bitrise-io@2.26.2` | `test_name: "Maestro shard 1/2/3 (Android)"` |
-| `maestro_android_parallel_1/2/3` | Native JUnit export via `maestro-test@1.2.0` (same as `maestro_android`, full unsplit suite each) | Internal to the step | `deploy-to-bitrise-io@2.26.2` | `test_name: "Maestro parallel copy 1/2/3 (Android)"` |
+| `maestro_android_parallel_copy` (×3 via `parallel: 3`) | Native JUnit export via `maestro-test@1.2.0` (same as `maestro_android`, full unsplit suite each) | Internal to the step | `deploy-to-bitrise-io@2.26.2` | `test_name: "Maestro parallel copy $BITRISE_IO_PARALLEL_INDEX (Android)"` → `0`/`1`/`2` |
 | `ios-maestro-e2e` (via `maestro_ios`/`maestro_cross_platform`) | Native JUnit export via `maestro-test@1.2.0` | Internal to the step | `deploy-to-bitrise-io@2.26.2` | `test_name: "Maestro E2E (iOS)"` — see [`bitrise/ios.md`](ios.md) §6 |
 
 The key mechanism behind "each shard reports its own separate Tests-tab
@@ -590,7 +606,7 @@ To copy this pattern to your own project:
    text like `"Count: 0"`) to match your own app's accessibility
    IDs/testTags and on-screen text — these are app-specific and will not
    carry over.
-3. Reuse the three Bitrise steps as-is: `avd-manager` (or skip it if testing
+3. Reuse the three Bitrise steps as-is: `bundle::android_avd_create` (or skip it if testing
    iOS/an already-running device) → `wait-for-android-emulator` →
    `maestro-test` with `app_path` and `flow_path` pointed at your app/flows
    → `deploy-to-bitrise-io`.

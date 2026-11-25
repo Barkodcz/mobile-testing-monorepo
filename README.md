@@ -144,7 +144,12 @@ it.
   `bitrise/` has five `.md` files but the root has one `BITRISE.md`). Every sample app folder gets
   its own short `README.md` linking to its CI doc.
 - **Step pinning**: every Bitrise Step is pinned to an exact version, never a floating major — see
-  [concepts §6](docs/BITRISE_CONCEPTS.md#6-step-version-pinning).
+  [concepts §9](docs/BITRISE_CONCEPTS.md#9-step-version-pinning).
+- **Official Steps over `script`, and Step bundles for repeated sequences**: every `script` Step in
+  this repo was checked against the Bitrise StepLib for an official replacement, and repeated Step
+  sequences (AVD creation, iOS simulator boot) were factored into Step bundles — see
+  [concepts §6](docs/BITRISE_CONCEPTS.md#6-official-steps-vs-script) and
+  [§7](docs/BITRISE_CONCEPTS.md#7-step-bundles).
 - **Element IDs**: every sample app exposes the same four element IDs
   (`count_label`/`decrement_button`/`increment_button`/`reset_button`) via its platform's native
   accessibility/test-tag mechanism. Keep this convention when adding a new sample app so Maestro

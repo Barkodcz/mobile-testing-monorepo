@@ -144,10 +144,13 @@ Manual-only helper, not in any pipeline.
 
 ### `flutter_integration_tests`
 
-1. **`avd-manager@2.2.0`** — `profile: pixel_6`, `api_level: "34"`, `tag: google_apis`,
-   `abi: x86_64`. Creates and boots an Android Virtual Device matching a Pixel 6 profile on API
-   34 (Android 14) with Google APIs, x86_64 (fast on the Linux build machines this runs on — per
-   the Step's own docs, Android emulators can't run on Apple Silicon machines at all, which is
+1. **`bundle::android_avd_create`** — Step bundle (root [`bitrise.yml`](../bitrise.yml), see
+   [`docs/BITRISE_CONCEPTS.md`](../docs/BITRISE_CONCEPTS.md) §7; previously an inline
+   `avd-manager@2.2.0` here), with its default inputs: `avd_profile: pixel_6`,
+   `avd_api_level: "34"`, `avd_tag: google_apis`, `avd_abi: x86_64`. Creates and boots an Android
+   Virtual Device matching a Pixel 6 profile on API 34 (Android 14) with Google APIs, x86_64 (fast
+   on the Linux build machines this runs on — per the Step's own docs, Android emulators can't run
+   on Apple Silicon machines at all, which is
    why this workflow pins the Linux stack rather than inheriting a Mac one).
 2. **`wait-for-android-emulator@1.0.10`** — blocks until the AVD above finishes booting.
 3. **`script@1.2.1` — "Start screen recording"**: runs
@@ -208,7 +211,7 @@ Manual-only helper, not in any pipeline.
 
 ### `flutter_patrol_android`
 
-1. **`avd-manager@2.2.0`** — same profile as above.
+1. **`bundle::android_avd_create`** — same bundle, same profile, as `flutter_integration_tests` above.
 2. **`script@1.2.1` — "Prepare Android project for Patrol"**
    ```bash
    set -eo pipefail
@@ -351,10 +354,11 @@ three-item breakdown below.
    Flutter 3.24+ defaults new iOS projects to Swift Package Manager and only emits a `Podfile` if
    a plugin actually needs CocoaPods — this app has none, so `cocoapods-install@3.1.1` (the native
    Step) would hard-fail with `No Podfile found`; this conditional script replaces it.
-3. **`script@1.2.1` — "Boot simulator for Patrol"**: `xcrun simctl boot "Bitrise iOS default"`
-   (tolerating "already booted"), then `xcrun simctl bootstatus "Bitrise iOS default" -b` to
-   actually block until SpringBoard is ready (`simctl boot` alone returns before the simulator can
-   accept app launches).
+3. **`bundle::ios_simulator_boot`** — Step bundle (root [`bitrise.yml`](../bitrise.yml), see
+   [`docs/BITRISE_CONCEPTS.md`](../docs/BITRISE_CONCEPTS.md) §7; previously an inline
+   `script@1.2.1` here): `xcrun simctl boot "Bitrise iOS default"` (tolerating "already booted"),
+   then `xcrun simctl bootstatus "Bitrise iOS default" -b` to actually block until SpringBoard is
+   ready (`simctl boot` alone returns before the simulator can accept app launches).
 4. **`script@1.2.1` — "Start screen recording"**: runs
    [`start-ios-sim.sh`](../scripts/recording/start-ios-sim.sh) `booted .../patrol-ios.mov` —
    `xcrun simctl io booted recordVideo` under the hood, targeting whichever simulator is currently
@@ -489,7 +493,7 @@ stack-specific tools (e.g. `avd-manager`/`xcrun simctl` need their respective pl
 
 - Minimal copy for unit/widget/golden tests: `_flutter_setup` + the `flutter_tests` workflow as-is
   (swap the working dir).
-- For `integration_test`: add `avd-manager` + `wait-for-android-emulator`, and reuse
+- For `integration_test`: add `bundle::android_avd_create` + `wait-for-android-emulator`, and reuse
   `scripts/recording/start-android.sh`/`stop-android.sh`/`concat-chunks.sh` and
   `scripts/reporting/attach_media_to_junit.py` verbatim — they're framework-agnostic.
 - For Patrol on Android: additionally copy `tool/patrol_setup_android.py` and run it once per

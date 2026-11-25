@@ -47,7 +47,7 @@ Linux unless noted (Mac workflows cost real money/time — be deliberate about r
 | `maestro` | e2e.yml | auto (`apps/android/**`, `e2e/maestro/**`) | `maestro_android` | Linux |
 | `appium` | e2e.yml | auto, push to `main` only | `appium_browserstack` | Linux |
 | `android_maestro_sharded` | e2e.yml | manual | `android-maestro-shard-build` → `-shard-1`/`-2`/`-3` (parallel) | Linux |
-| `maestro_android_parallel` | e2e.yml | manual | `maestro_android_parallel_1`/`-2`/`-3` (parallel, full suite each) | Linux |
+| `maestro_android_parallel` | e2e.yml | manual | `maestro_android_parallel_copy` × 3 via `parallel: 3` (one workflow, 3 parallel copies, full suite each) | Linux |
 | `maestro_cross_platform` | e2e.yml | manual | `maestro_android`, `ios-maestro-e2e` (parallel) | Linux + Mac |
 | `maestro_ios` | ios.yml | manual | `ios-maestro-e2e` | Mac |
 | `flutter` | flutter.yml | auto (`apps/flutter/**`) | `flutter_tests` → `flutter_integration_tests`, `flutter_patrol_android`, `flutter_patrol_ios` (parallel) | Linux + Mac (patrol_ios) |
@@ -153,7 +153,7 @@ if you want to sanity-check without spending CI minutes at all.
 | `appium_browserstack` | `Appium on BrowserStack` | **Expected to fail without `BROWSERSTACK_USERNAME`/`BROWSERSTACK_ACCESS_KEY` secrets** — see §6. With secrets present, pytest suite passes on a real BrowserStack device. | n/a (needs BrowserStack account) |
 | `android-appium-local` | `Appium on local Android emulator` | pytest suite passes against a local AVD + local Appium server | `cd e2e/appium && APPIUM_TARGET=local pytest tests/test_counter.py` |
 | `android_maestro_sharded` | 3 separate entries, `Maestro shard 1/2/3 (Android)` | Flows split round-robin across 3 shards; with only 2 flow files and `MAESTRO_SHARD_COUNT=3` (default), **shard 3 legitimately has 0 flows** — its entry shows as passing-with-nothing-to-run, not a failure | n/a — sharding is pipeline-only |
-| `maestro_android_parallel` | 3 separate entries, `Maestro parallel copy 1/2/3 (Android)` | Each copy runs the **full, unsplit** suite independently (contrast with sharding above); all 3 pass with the same results | n/a — three independent `maestro test e2e/maestro` runs |
+| `maestro_android_parallel` | 3 separate entries (one workflow × `parallel: 3`), `Maestro parallel copy 0/1/2 (Android)` | Each copy runs the **full, unsplit** suite independently (contrast with sharding above); all 3 pass with the same results | n/a — three independent `maestro test e2e/maestro` runs |
 | `maestro_cross_platform` | `Maestro E2E (Android)` + `Maestro E2E (iOS)` | Same two existing entries as `maestro_android`/`ios-maestro-e2e` run alone, just started together in one pipeline | n/a — pipeline-only |
 | `maestro_ios` | `Maestro E2E (iOS)` | Same as `ios-maestro-e2e` run standalone (§ iOS table above), just started as a pipeline | `maestro test apps/ios/maestro` |
 
