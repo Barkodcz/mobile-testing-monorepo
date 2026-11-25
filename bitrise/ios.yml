@@ -19,6 +19,16 @@ pipelines:
         changed_files:
           regex: '^(apps/ios/.*|bitrise/ios\.yml)$'
 
+  # Maestro E2E against the native iOS app, wrapped as its own pipeline so it
+  # can be started the same way as the other Maestro pipelines in
+  # bitrise/e2e.yml (maestro_cross_platform, maestro_android_parallel,
+  # android_maestro_sharded). The underlying workflow is unchanged -- see
+  # ios-maestro-e2e below. Manual-trigger only, same reasoning as the
+  # workflow itself (avoid spending Mac-minutes on every push).
+  maestro_ios:
+    workflows:
+      ios-maestro-e2e: {}
+
   # Scenario 3a: build the CounterApp-UI test bundle once, shard it, run the
   # shards in parallel, each reporting its own Tests tab entry. Start this
   # PIPELINE from the Bitrise UI (not any one of its workflows directly).

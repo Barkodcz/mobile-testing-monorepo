@@ -28,8 +28,11 @@ running and reporting iOS tests on Bitrise:
   - `ios_ui_tests` — native `xcode-test` step ("Approach A").
   - `ios_ui_tests_manual` — raw `xcodebuild test` + `xcpretty` ("Approach B").
   - `ios-fastlane-scan` — fastlane's `scan` lane.
-- **Maestro E2E** (`ios-maestro-e2e`): the same journeys as the Android
-  Maestro flows, ported to iOS.
+- **Maestro E2E** (`ios-maestro-e2e`, wrapped as the `maestro_ios` pipeline):
+  the same journeys as the Android Maestro flows, ported to iOS. See also
+  [`bitrise/e2e.md`](e2e.md) for the cross-platform (`maestro_cross_platform`)
+  and parallel-copies (`maestro_android_parallel`) pipelines that build on
+  this workflow.
 - **Appium** (`ios-appium-local`): Python/pytest driving a local Appium
   server + XCUITest driver against a local simulator.
 - **Sharded XCUITest** (`ios_xcuitest_sharded` pipeline): build the UI test
@@ -125,8 +128,16 @@ there is nothing here that implies an external credential dependency.
   the YAML's own comment explains it exists only to demonstrate Approach B,
   not to double-run the UI tests on every push.
 
+- **`maestro_ios` pipeline**: wraps the single `ios-maestro-e2e` workflow,
+  with no `triggers:` block — manual-start only, same reasoning as the
+  workflow itself. Exists so Maestro-on-iOS can be started the same way
+  (Start build → Pipeline) as the other Maestro pipelines documented in
+  [`bitrise/e2e.md`](e2e.md).
+
 - **Manual-trigger-only workflows** (no trigger block at all, not listed in
-  any pipeline — started from the Bitrise UI "Start build" dialog): `ios-maestro-e2e`,
+  any pipeline of its own — started from the Bitrise UI "Start build"
+  dialog, or via `maestro_ios`/`maestro_cross_platform` for
+  `ios-maestro-e2e`): `ios-maestro-e2e`,
   `ios-fastlane-scan`, `ios-appium-local`, `ios_ui_tests_manual`. Per their
   own summaries, the reasons are: avoiding extra simulator minutes on every
   push (`ios-maestro-e2e`), existing purely as an alternative-approach demo

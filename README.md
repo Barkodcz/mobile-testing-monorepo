@@ -47,7 +47,7 @@ bitrise/
 ├── android.yml / android.md    <- Android: unit, Paparazzi snapshot, instrumented UI, Virtual Device Testing
 ├── react-native.yml / react-native.md  <- Jest, Detox (iOS), Maestro (both platforms)
 ├── flutter.yml / flutter.md     <- unit/widget/golden, integration_test, Patrol (Android + iOS)
-└── e2e.yml / e2e.md             <- Maestro (+ sharded pipeline) and Appium (BrowserStack + local), against apps/android
+└── e2e.yml / e2e.md             <- Maestro (plain, sharded, parallel-copies, cross-platform) and Appium (BrowserStack + local), against apps/android
 
 apps/
 ├── android/      <- native Kotlin/Compose counter app          (see apps/android/README.md)
@@ -97,7 +97,7 @@ docs/
 | Flutter | `integration_test` | instrumented | yes, host-side `adb shell screenrecord` | yes | `g2.linux.large` (emulator) | [`bitrise/flutter.md`](bitrise/flutter.md) |
 | Flutter | Patrol (Android) | instrumented + native | yes | yes, + per-test native screenshots | `g2.linux.large` (emulator) | [`bitrise/flutter.md`](bitrise/flutter.md) |
 | Flutter | Patrol (iOS) | instrumented + native | yes, `simctl` recording | yes (screenshots not yet attaching — open issue) | `osx-xcode-27.2.x` / `g2.mac.medium` | [`bitrise/flutter.md`](bitrise/flutter.md) |
-| (native Android app) | Maestro (+ sharded pipeline) | E2E | yes (native) | yes | `g2.linux.large` (emulator) | [`bitrise/e2e.md`](bitrise/e2e.md) |
+| (native Android app) | Maestro (plain, sharded, parallel-copies, cross-platform with iOS) | E2E | yes (native) | yes | `g2.linux.large` (emulator) / Mac for the cross-platform iOS stage | [`bitrise/e2e.md`](bitrise/e2e.md) |
 | (native Android app) | Appium (BrowserStack / local) | E2E | yes | yes | BrowserStack (real device) / local emulator | [`bitrise/e2e.md`](bitrise/e2e.md) |
 
 This table summarizes; each linked doc has the exact workflow name, every step, and the full

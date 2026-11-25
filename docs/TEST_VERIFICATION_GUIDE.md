@@ -47,6 +47,9 @@ Linux unless noted (Mac workflows cost real money/time — be deliberate about r
 | `maestro` | e2e.yml | auto (`apps/android/**`, `e2e/maestro/**`) | `maestro_android` | Linux |
 | `appium` | e2e.yml | auto, push to `main` only | `appium_browserstack` | Linux |
 | `android_maestro_sharded` | e2e.yml | manual | `android-maestro-shard-build` → `-shard-1`/`-2`/`-3` (parallel) | Linux |
+| `maestro_android_parallel` | e2e.yml | manual | `maestro_android_parallel_1`/`-2`/`-3` (parallel, full suite each) | Linux |
+| `maestro_cross_platform` | e2e.yml | manual | `maestro_android`, `ios-maestro-e2e` (parallel) | Linux + Mac |
+| `maestro_ios` | ios.yml | manual | `ios-maestro-e2e` | Mac |
 | `flutter` | flutter.yml | auto (`apps/flutter/**`) | `flutter_tests` → `flutter_integration_tests`, `flutter_patrol_android`, `flutter_patrol_ios` (parallel) | Linux + Mac (patrol_ios) |
 | `react_native` | react-native.yml | auto (`apps/react-native/**`) | `rn_jest_tests` → `rn_detox_ios` | Linux + Mac (detox) |
 | `everything_fast` | root `bitrise.yml` | manual | `ios_unit_tests`, `android_unit_tests`, `android_snapshot_tests`, `rn_jest_tests`, `flutter_tests` (all parallel) | mixed |
@@ -55,7 +58,7 @@ Linux unless noted (Mac workflows cost real money/time — be deliberate about r
 
 | Workflow | Module | Stack | What it covers |
 |---|---|---|---|
-| `ios-maestro-e2e` | ios.yml | Mac | Maestro against the native iOS app |
+| `ios-maestro-e2e` | ios.yml | Mac | Maestro against the native iOS app (also reachable via the `maestro_ios` and `maestro_cross_platform` pipelines) |
 | `ios-fastlane-scan` | ios.yml | Mac | XCUITest via fastlane `scan` |
 | `ios-appium-local` | ios.yml | Mac | Appium + local iOS Simulator |
 | `ios_ui_tests_manual` | ios.yml | Mac | XCUITest via manual `xcodebuild test` |
@@ -65,8 +68,10 @@ Linux unless noted (Mac workflows cost real money/time — be deliberate about r
 | `ios-maestro-e2e-rn` | react-native.yml | Mac | Maestro against the RN app's iOS build |
 | `android-appium-local` | e2e.yml | Linux | Appium + local Android emulator, against the native Android app |
 
-**27 total execution units** (9 pipelines + 9 standalone workflows, where pipelines themselves
-expand to 1–4 workflows each).
+**33 total execution units** (12 pipelines + 9 standalone workflows, where pipelines themselves
+expand to 1–4 workflows each) — up from 27/9 pipelines after adding `maestro_android_parallel`,
+`maestro_cross_platform`, and `maestro_ios` (see [`bitrise/e2e.md`](../bitrise/e2e.md) and
+[`bitrise/ios.md`](../bitrise/ios.md)).
 
 ---
 
@@ -148,6 +153,9 @@ if you want to sanity-check without spending CI minutes at all.
 | `appium_browserstack` | `Appium on BrowserStack` | **Expected to fail without `BROWSERSTACK_USERNAME`/`BROWSERSTACK_ACCESS_KEY` secrets** — see §6. With secrets present, pytest suite passes on a real BrowserStack device. | n/a (needs BrowserStack account) |
 | `android-appium-local` | `Appium on local Android emulator` | pytest suite passes against a local AVD + local Appium server | `cd e2e/appium && APPIUM_TARGET=local pytest tests/test_counter.py` |
 | `android_maestro_sharded` | 3 separate entries, `Maestro shard 1/2/3 (Android)` | Flows split round-robin across 3 shards; with only 2 flow files and `MAESTRO_SHARD_COUNT=3` (default), **shard 3 legitimately has 0 flows** — its entry shows as passing-with-nothing-to-run, not a failure | n/a — sharding is pipeline-only |
+| `maestro_android_parallel` | 3 separate entries, `Maestro parallel copy 1/2/3 (Android)` | Each copy runs the **full, unsplit** suite independently (contrast with sharding above); all 3 pass with the same results | n/a — three independent `maestro test e2e/maestro` runs |
+| `maestro_cross_platform` | `Maestro E2E (Android)` + `Maestro E2E (iOS)` | Same two existing entries as `maestro_android`/`ios-maestro-e2e` run alone, just started together in one pipeline | n/a — pipeline-only |
+| `maestro_ios` | `Maestro E2E (iOS)` | Same as `ios-maestro-e2e` run standalone (§ iOS table above), just started as a pipeline | `maestro test apps/ios/maestro` |
 
 ---
 
@@ -160,11 +168,14 @@ config source was pointed at the wrong place.
 1. **Confirm config source** (§1 prerequisite). If in doubt, push a trivial, easily-greppable
    change to any `bitrise/*.yml` comment first and confirm it shows up in the next build's log
    before trusting anything else.
-2. **Trigger every pipeline** (9 total, §2): `ios`, `ios_xcuitest_sharded`, `android`, `maestro`,
-   `appium`, `android_maestro_sharded`, `flutter`, `react_native`, `everything_fast`.
+2. **Trigger every pipeline** (12 total, §2): `ios`, `ios_xcuitest_sharded`, `maestro_ios`,
+   `android`, `maestro`, `appium`, `android_maestro_sharded`, `maestro_android_parallel`,
+   `maestro_cross_platform`, `flutter`, `react_native`, `everything_fast`.
 3. **Trigger every standalone manual workflow** (9 total, §2): `ios-maestro-e2e`,
    `ios-fastlane-scan`, `ios-appium-local`, `ios_ui_tests_manual`, `android_record_snapshots`,
    `android-espresso-vdt`, `android-maestro-e2e-rn`, `ios-maestro-e2e-rn`, `android-appium-local`.
+   (`ios-maestro-e2e` is also covered by the `maestro_ios`/`maestro_cross_platform` pipeline
+   triggers above — no need to trigger it a third time separately.)
 4. **Wait and poll**. Mac builds (anything simulator-based) run 3–10 minutes each; Linux
    unit/snapshot workflows finish in under a minute. `list_pipelines`/`list_builds` filtered by
    branch is the fastest way to see everything's current status in one call.
@@ -180,7 +191,7 @@ config source was pointed at the wrong place.
 6. **Record the result** — update §6 below with the date and what you found, so the next sweep
    has a point of comparison.
 
-This exact procedure (18 triggers: 9 pipelines + 9 standalone workflows) is what produced the
+This exact procedure (21 triggers: 12 pipelines + 9 standalone workflows) is what produced the
 baseline in §6.
 
 ---

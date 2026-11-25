@@ -24,10 +24,25 @@ with two different end-to-end frameworks:
   emulator + local Appium server.
 
 Beyond the two "plain" workflows (one Maestro, one Appium/BrowserStack), the
-file also demonstrates a **sharded Maestro pipeline**
-(`android_maestro_sharded`) that builds the APK once and fans the existing
-Maestro flow files out across three parallel shard workflows, each reporting
-its own entry on the build's Tests tab.
+file also demonstrates four ways of scaling/combining the same Maestro flows
+across more than one device at once:
+
+- **`android_maestro_sharded`** — builds the APK once and fans the existing
+  Maestro flow *files* out across three parallel shard workflows (each shard
+  runs a *subset* of the flows), each reporting its own Tests-tab entry.
+- **`maestro_android_parallel`** — runs the *entire* Maestro suite (both flow
+  files, unsplit) three times over, as three fully independent parallel
+  copies (`maestro_android_parallel_1/2/3`), each on its own emulator with
+  its own Tests-tab entry. Contrast with sharding: this doesn't divide the
+  work to go faster, it repeats the whole suite concurrently (useful for
+  flake detection or soak-testing N simultaneous runs).
+- **`maestro_cross_platform`** — runs the same flows against *both* native
+  apps in one pipeline: `maestro_android` (Linux emulator, this file) and
+  `ios-maestro-e2e` ([`bitrise/ios.yml`](ios.yml), Mac simulator) as two
+  independent (parallel) stages.
+- **`maestro_ios`** — the iOS-only counterpart, documented in
+  [`bitrise/ios.md`](ios.md); just `ios-maestro-e2e` wrapped as a pipeline so
+  it can be started the same way as the three above.
 
 What a reader should expect to see on a build:
 - `maestro_android` / `appium_browserstack`: one Tests-tab entry each, with
@@ -38,6 +53,15 @@ What a reader should expect to see on a build:
   each producing a Tests-tab entry (because, with the current two flow
   files, those are the shards that actually have flows to run), and shard 3
   running 0 flows at the default shard count (see §9).
+- `maestro_android_parallel`: three workflow runs in parallel, no
+  `depends_on` and no shared build stage (each copy builds its own APK) —
+  three full, independent Tests-tab entries ("Maestro parallel copy 1/2/3
+  (Android)"), each with every flow's screenshots + video attached, same as
+  a single `maestro_android` run.
+- `maestro_cross_platform`: two workflow runs in parallel — `maestro_android`
+  and `ios-maestro-e2e` — each producing its own existing Tests-tab entry
+  ("Maestro E2E (Android)" / "Maestro E2E (iOS)"); nothing new to report
+  beyond what each workflow already does alone.
 - `android-appium-local`: a manual-only workflow that runs the exact same
   Appium test file against a local AVD + local Appium server instead of
   BrowserStack, proving the test code itself doesn't depend on BrowserStack.
@@ -53,6 +77,11 @@ What a reader should expect to see on a build:
 | `android-appium-local` | `ubuntu-noble-24.04-bitrise-2025-android` | `g2.linux.large` |
 | `android-maestro-shard-build` | `ubuntu-noble-24.04-bitrise-2025-android` | `g2.linux.medium` |
 | `android-maestro-shard-1/2/3` | `ubuntu-noble-24.04-bitrise-2025-android` | `g2.linux.large` |
+| `maestro_android_parallel_1/2/3` | `ubuntu-noble-24.04-bitrise-2025-android` | `g2.linux.large` |
+
+`maestro_cross_platform`'s own `ios-maestro-e2e` stage is defined in, and
+uses the stack/machine documented in, [`bitrise/ios.md`](ios.md) (`osx-xcode-27.2.x`
+/ `g2.mac.medium`) — not repeated here.
 
 `appium_browserstack` sets no `meta.bitrise.io` block of its own, so it
 inherits the root [`bitrise.yml`](../bitrise.yml) default:
@@ -71,8 +100,9 @@ BrowserStack's API.
   needs no emulator since it only builds the APK).
 - **Maestro CLI**: `maestro_android` uses whatever version the
   `maestro-test@1.2.0` step defaults to (`2.11.0` per StepLib, not pinned in
-  this YAML); the three sharded `maestro-test@1.2.0` invocations explicitly
-  pin `maestro_version: 2.12.1`.
+  this YAML); the three sharded `maestro-test@1.2.0` invocations, and the
+  three `maestro_android_parallel_1/2/3` invocations, explicitly pin
+  `maestro_version: 2.12.1`.
 - **Node.js** (for the local Appium server in `android-appium-local`): no
   explicit Node-version step — relies on whatever Node ships on the stack
   image, then installs `appium@2.11.0` globally via `npm install -g` and the
@@ -145,6 +175,19 @@ BrowserStack's API.
   `summary` fields repeats that warning (e.g. `android-maestro-shard-build`:
   *"Part of the android_maestro_sharded pipeline — don't start this workflow
   directly."*).
+- **`maestro_android_parallel`** pipeline: no `triggers:` block — manual-start
+  only, same cost reasoning as `android_maestro_sharded`. Three workflows
+  (`maestro_android_parallel_1/2/3`), no `depends_on` between them, so all
+  three start simultaneously — unlike the sharded pipeline, there's no shared
+  build stage; each copy builds its own APK independently.
+- **`maestro_cross_platform`** pipeline: no `triggers:` block — manual-start
+  only (adding a Mac stage to anything that runs on every push would spend
+  Mac-minutes on Android-only changes too). Two workflows, `maestro_android`
+  (this file) and `ios-maestro-e2e` ([`bitrise/ios.yml`](ios.yml)), again with
+  no `depends_on` so both start in parallel.
+- **`maestro_ios`** pipeline: defined in [`bitrise/ios.yml`](ios.yml), see
+  [`bitrise/ios.md`](ios.md) §3 — just `ios-maestro-e2e` wrapped as a
+  pipeline, manual-start only.
 
 ### `android_maestro_sharded` pipeline wiring
 
@@ -385,6 +428,31 @@ Shard 2 and shard 3 differ only in: the temp dir name
 (`NR % n == 2`, `NR % n == 0`), the `test_name` (`Maestro shard 2/3
 (Android)`), and the echoed shard number.
 
+### 4.6 `maestro_android_parallel_1` / `-2` / `-3`
+
+Part of the `maestro_android_parallel` pipeline. All three are byte-for-byte
+identical to `maestro_android` (§4.1) — same steps, same `flow_path`
+(`$BITRISE_SOURCE_DIR/e2e/maestro`, i.e. every flow file, unsplit) — except
+for the `test_name` input (`"Maestro parallel copy 1/2/3 (Android)"`) and
+pinning `maestro_version: 2.12.1` (which `maestro_android` itself doesn't
+pin, see §9). Each copy clones the repo, boots its own emulator, builds its
+own APK, and runs the full suite independently; there's no shared build
+stage and no `pipeline_intermediate_files` anywhere in these three
+workflows, unlike `android-maestro-shard-build`/`-1/2/3` — the whole point
+is three fully independent runs of the same suite, not three subsets of one
+run.
+
+### 4.7 `maestro_cross_platform` pipeline
+
+Two workflows, no `depends_on`, both start together:
+- `maestro_android` — exactly as described in §4.1, unchanged.
+- `ios-maestro-e2e` — defined in [`bitrise/ios.yml`](ios.yml), described in
+  full in [`bitrise/ios.md`](ios.md) §4; unchanged here too.
+
+Nothing in either workflow is parameterized or shared between them — the
+pipeline only expresses "run both at once"; each keeps its own emulator/
+simulator, build, and Tests-tab entry exactly as it would running alone.
+
 ## 5. Video recording
 
 Two entirely different mechanisms are used, one per framework:
@@ -441,6 +509,8 @@ elsewhere in this repo for frameworks that record at suite granularity.
 | `appium_browserstack` | `pytest --junitxml=test-results/appium.xml` | `e2e/appium/test-results/appium.xml` (plus the per-test screenshot/video files alongside it) | `custom-test-results-export@2.0.0` packages it for `deploy-to-bitrise-io@2.26.2` to actually upload | `test_name: "Appium on BrowserStack"` |
 | `android-appium-local` | `pytest --junitxml=test-results/appium-local.xml` | `e2e/appium/test-results/appium-local.xml` | same two-step pattern | `test_name: "Appium on local Android emulator"` |
 | `android-maestro-shard-1/2/3` | Native JUnit export via `maestro-test@1.2.0` (same as `maestro_android`, scoped to that shard's flow subset) | Internal to the step | `deploy-to-bitrise-io@2.26.2` | `test_name: "Maestro shard 1/2/3 (Android)"` |
+| `maestro_android_parallel_1/2/3` | Native JUnit export via `maestro-test@1.2.0` (same as `maestro_android`, full unsplit suite each) | Internal to the step | `deploy-to-bitrise-io@2.26.2` | `test_name: "Maestro parallel copy 1/2/3 (Android)"` |
+| `ios-maestro-e2e` (via `maestro_ios`/`maestro_cross_platform`) | Native JUnit export via `maestro-test@1.2.0` | Internal to the step | `deploy-to-bitrise-io@2.26.2` | `test_name: "Maestro E2E (iOS)"` — see [`bitrise/ios.md`](ios.md) §6 |
 
 The key mechanism behind "each shard reports its own separate Tests-tab
 entry" is simply that **`maestro-test`'s `test_name` input becomes the
